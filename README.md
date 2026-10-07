@@ -34,6 +34,7 @@ voxlat/
 ├── data/                  # computed tables (*.parquet)
 ├── models/                # trained surrogate models
 ├── results/figures/       # 300-dpi PNG figures
+├── docs/                  # per-task explainers (docs/task1_explained.md, ...)
 ├── legacy/                # original Noyron 2.0 prototype, unchanged (see legacy/README.md)
 └── STATUS.md              # hand-off log, updated by every task
 ```
@@ -92,6 +93,22 @@ cfg2 = load_config(overrides={"operating": {"nominal_flow_rate": 1e-4}})
 
 Never hard-code a reference number in a module: read it from the config.
 Set `VOXLAT_CONFIG=path\to\other.yaml` to use another file.
+
+## TPMS geometry (Task 1)
+
+```python
+from voxlat.geometry import TPMSParams, voxelize, compute_metrics, check_manufacturable, min_cell_size
+
+p = TPMSParams(w=0.0, rho=0.3, a=(1, 1, 1.2))    # w: 0 gyroid ... 1 diamond; rho: solid fraction
+cell = voxelize(p, n=48)                          # bool[48, 48, 58], True = solid, exactly periodic
+m = compute_metrics(p, n=48, L=4e-3)              # a_sf, wall/pore thickness, connectivity
+check_manufacturable(p, L=4e-3).ok                # min wall 0.35 mm, pore throat 0.8 mm, connected
+min_cell_size(0.5, 0.35)                          # smallest manufacturable L [m] (table, vectorized)
+```
+
+Background and design decisions: [docs/task1_explained.md](docs/task1_explained.md).
+The precomputed tables in `src/voxlat/geometry/data/` are rebuilt with
+`python scripts/task1_build_tables.py` (only needed if the geometry definitions change).
 
 ## Conventions
 

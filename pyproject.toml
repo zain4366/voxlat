@@ -36,6 +36,10 @@ opt = ["pymoo>=0.6.1", "botorch>=0.11"]
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+# precomputed TPMS tables (Task 1, scripts/task1_build_tables.py)
+"voxlat.geometry" = ["data/*.npz"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # legacy/ holds the old Noyron scripts (e.g. test_bridge.py needs pythonnet); never collect them.
