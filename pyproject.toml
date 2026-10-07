@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "voxlat"
+version = "0.1.0"
+description = "Voxel-based homogenization and multi-objective design of graded TPMS lattice cooling jackets (CPU-only)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Ahmed Mukhtar Bukhari" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "scikit-image>=0.22",
+    "scikit-learn>=1.3",
+    "pandas>=2.1",
+    "pyarrow>=14",
+    "matplotlib>=3.8",
+    "pyyaml>=6.0",
+    "joblib>=1.3",
+    "tqdm>=4.66",
+    "pytest>=8.0",
+]
+
+[project.optional-dependencies]
+ml = ["torch>=2.2"]
+opt = ["pymoo>=0.6.1", "botorch>=0.11"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# legacy/ holds the old Noyron scripts (e.g. test_bridge.py needs pythonnet); never collect them.
+norecursedirs = ["legacy", ".git", ".venv", "venv", "build", "dist", "*.egg-info", "data", "results", "models"]
+addopts = "-ra"
+markers = [
+    "slow: long-running verification tests (deselect with -m 'not slow')",
+]

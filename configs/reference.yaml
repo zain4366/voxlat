@@ -1,0 +1,80 @@
+# =============================================================================
+# VoxLat reference problem — SINGLE SOURCE OF TRUTH
+# Liquid-cooling jacket around the stator of a 15 kW inrunner PMSM.
+#
+# ALL VALUES ARE SI (m, kg, s, K, W, Pa, rad). Comments give the "human" units
+# used in the task plan (claude/voxlat_task_plan.md, section 2).
+# Load with:  from voxlat.utils.config import load_config
+# =============================================================================
+
+motor:
+  continuous_power: 15000.0        # W   (15 kW continuous, PMSM inrunner)
+  efficiency: 0.94                 # -
+  heat_to_jacket: 770.0            # W   Q, heat rejected into the jacket (assumed share of total loss)
+
+jacket:
+  stator_radius: 0.070             # m   stator / sleeve inner radius (70 mm)
+  sleeve_thickness: 0.0015         # m   1.5 mm
+  lattice_gap: 0.006               # m   h = 6 mm  -> lattice spans r = 71.5 ... 77.5 mm
+  outer_wall_thickness: 0.002      # m   2 mm
+  axial_length: 0.050              # m   50 mm
+
+heat_flux:
+  # q''(z) = q_mean * [1 + a * (12 (zeta - 1/2)^2 - 1)],  zeta = z / axial_length
+  # q_mean = Q / (2 pi r_stator L) ~= 35 kW/m^2 (defined on the stator radius).
+  # With a = 0.25 the ends carry 2x the centre flux; the bracket integrates to 1.
+  profile: end_peaked_quadratic
+  amplitude: 0.25                  # -
+
+coolant:
+  name: "50/50 water-glycol"
+  density: 1060.0                  # kg/m^3
+  specific_heat: 3400.0            # J/(kg K)
+  conductivity: 0.40               # W/(m K)
+  kinematic_viscosity: 2.3e-6      # m^2/s
+
+operating:
+  inlet_temperature: 323.15        # K   (50 degC)
+  nominal_flow_rate: 5.0e-5        # m^3/s  (3 L/min)
+  flow_rate_sweep:                 # m^3/s  (1, 2, 3, 4, 5 L/min)
+    - 1.6666666666666667e-5
+    - 3.3333333333333333e-5
+    - 5.0e-5
+    - 6.6666666666666667e-5
+    - 8.3333333333333333e-5
+  pump_efficiency: 0.30            # -
+
+manifolds:
+  # Inlet at theta = 0, outlet at theta = 180 deg -> two parallel flow paths.
+  inlet_angle: 0.0                 # rad
+  outlet_angle: 3.141592653589793  # rad (180 deg)
+  width: 0.015                     # m   arc-length width of each manifold slot (15 mm)
+  axial_extent: 0.050              # m   full axial length (configurable)
+
+material:
+  name: AlSi10Mg
+  youngs_modulus: 70.0e+9          # Pa  (70 GPa)
+  poisson_ratio: 0.33              # -
+  density: 2670.0                  # kg/m^3
+  conductivity: 130.0              # W/(m K)
+  allowable_stress: 80.0e+6        # Pa  (80 MPa, fatigue-limited assumption)
+
+loads:
+  torque: 36.0                     # N m
+  thrust: 780.0                    # N
+  coolant_pressure_gauge: 2.0e+5   # Pa  (2 bar gauge)
+
+design_bounds:                     # [lower, upper]
+  relative_density: [0.20, 0.50]   # rho* (solid volume fraction)
+  blend_w: [0.0, 1.0]              # 0 = gyroid, 1 = Schwarz diamond
+  cell_size: [0.002, 0.006]        # m   L = 2 ... 6 mm
+  axial_stretch: [0.7, 1.5]        # a_z
+
+manufacturing:
+  min_wall_thickness: 0.00035      # m   0.35 mm
+  min_pore_size: 0.0008            # m   0.8 mm
+  # Grading-gradient limit, expressed as the maximum change in relative density
+  # over one cell length:  |grad rho*| * L  <= this value.
+  # PLACEHOLDER — the plan only says "limit on grading gradient". Revisit in Task 7
+  # (graded-strip study) and fix before Task 11.
+  max_density_change_per_cell: 0.05

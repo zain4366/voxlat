@@ -1,0 +1,45 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.16, pytest-9.1.1, pluggy-1.6.0 -- /tmp/claude-0/-home-claude/ef5da43f-efe1-5a33-807f-7ac787f16a57/scratchpad/venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/claude/voxlat
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collecting ... collected 34 items
+
+tests/test_config.py::test_config_file_exists PASSED                     [  2%]
+tests/test_config.py::test_config_loads_and_is_typed PASSED              [  5%]
+tests/test_config.py::test_config_is_frozen PASSED                       [  8%]
+tests/test_config.py::test_reference_numbers_si PASSED                   [ 11%]
+tests/test_config.py::test_mean_heat_flux PASSED                         [ 14%]
+tests/test_config.py::test_heat_flux_shape PASSED                        [ 17%]
+tests/test_config.py::test_heat_flux_integrates_to_Q_trapezoid[51] PASSED [ 20%]
+tests/test_config.py::test_heat_flux_integrates_to_Q_trapezoid[201] PASSED [ 23%]
+tests/test_config.py::test_heat_flux_integrates_to_Q_trapezoid[1001] PASSED [ 26%]
+tests/test_config.py::test_heat_flux_integrates_to_Q_quadrature PASSED   [ 29%]
+tests/test_config.py::test_profile_conserves_Q_for_any_amplitude[0.0] PASSED [ 32%]
+tests/test_config.py::test_profile_conserves_Q_for_any_amplitude[0.25] PASSED [ 35%]
+tests/test_config.py::test_profile_conserves_Q_for_any_amplitude[0.5] PASSED [ 38%]
+tests/test_config.py::test_profile_conserves_Q_for_any_amplitude[0.9] PASSED [ 41%]
+tests/test_config.py::test_heat_flux_rejects_out_of_range PASSED         [ 44%]
+tests/test_config.py::test_unknown_key_rejected PASSED                   [ 47%]
+tests/test_config.py::test_missing_key_rejected PASSED                   [ 50%]
+tests/test_config.py::test_inconsistent_value_rejected PASSED            [ 52%]
+tests/test_config.py::test_overrides PASSED                              [ 55%]
+tests/test_config.py::test_env_var_path PASSED                           [ 58%]
+tests/test_utils.py::test_subpackages_import[geometry] PASSED            [ 61%]
+tests/test_utils.py::test_subpackages_import[homogenization] PASSED      [ 64%]
+tests/test_utils.py::test_subpackages_import[closures] PASSED            [ 67%]
+tests/test_utils.py::test_subpackages_import[surrogates] PASSED          [ 70%]
+tests/test_utils.py::test_subpackages_import[device] PASSED              [ 73%]
+tests/test_utils.py::test_subpackages_import[optimize] PASSED            [ 76%]
+tests/test_utils.py::test_subpackages_import[export] PASSED              [ 79%]
+tests/test_utils.py::test_subpackages_import[utils] PASSED               [ 82%]
+tests/test_utils.py::test_repo_layout PASSED                             [ 85%]
+tests/test_utils.py::test_set_seed_reproducible PASSED                   [ 88%]
+tests/test_utils.py::test_get_logger_single_handler PASSED               [ 91%]
+tests/test_utils.py::test_run_record_contents PASSED                     [ 94%]
+tests/test_utils.py::test_stopwatch_monotonic PASSED                     [ 97%]
+tests/test_utils.py::test_save_figure_300dpi PASSED                      [100%]
+
+============================== 34 passed in 0.80s ==============================
