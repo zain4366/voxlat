@@ -8,7 +8,7 @@ Plan: project doc `claude/voxlat_task_plan.md`. Reference numbers: `configs/refe
 |---|---|---|
 | 0 | Repo scaffold + config | **done** (2026-10-07) |
 | 1 | TPMS unit-cell geometry | **done** (2026-10-08) |
-| 2 | Conduction homogenization k_eff | not started |
+| 2 | Conduction homogenization k_eff | **done** (2026-10-08) |
 | 3 | Elasticity homogenization C_eff | not started |
 | 4 | Stokes permeability K | not started |
 | 5 | Closure dataset | not started |
@@ -215,8 +215,132 @@ n = 32 is fine for quick connectivity checks. Tasks 2–4 will choose their own 
 
 **Tests**: 108 passed (Task 0: 34, Task 1: 74 incl. 1 `slow`) in ~55 s; `pytest -m "not slow"` ~20 s.
 
-## Task 2 — Conduction homogenization
-_not started_
+## Task 2 — Conduction homogenization  ✅
+
+**Built**
+- `src/voxlat/homogenization/conduction.py` — periodic cell problem for k_eff (3×3):
+  cell-centred finite volumes on voxels, harmonic-mean face conductances, periodic fluctuation
+  θ, three unit macroscopic gradients, PCG (scipy `cg`, rtol 1e-8; pyamg smoothed-aggregation
+  V-cycle if installed, else Jacobi). k_eff computed by **flux averaging and by energy**; the
+  function raises if they differ by > 1e-5 (observed 1e-9 … 2e-9). Contrast 1e3 and the
+  **k_f = 0 limit** work: non-conducting voxels are dropped, the singular-but-consistent
+  per-component blocks (floating islands) are handled by projecting b onto range(A).
+- `src/voxlat/homogenization/convergence.py` — `richardson`, `observed_order`,
+  `fit_convergence` (shared by Tasks 3, 4, 7).
+- `voxlat.geometry.voxelize(..., offset=)` / `sample_level_set(..., offset=)`: optional rigid shift
+  of the TPMS against the grid (backward compatible; default = old behaviour). Used to separate
+  grid-alignment noise from the systematic staircase error.
+- Scripts: `scripts/task2_convergence.py` (~15 min, 2 cores), `scripts/task2_keff_vs_density.py`
+  (~2 min). Both take `--quick`.
+- `pyproject.toml`: new optional extra `amg = ["pyamg>=5.0"]`; README updated.
+- Tests: `tests/test_conduction.py` (62 incl. 4 `slow`; the AMG test skips without pyamg),
+  + 1 offset test in `tests/test_tpms.py`.
+
+**Public API (`voxlat.homogenization`)**
+```python
+effective_conductivity(cell, k_s=None, k_f=None, *, tol=1e-8, preconditioner="auto"|"amg"|"jacobi"|"none",
+                       maxiter=None, return_fields=False, check=True, agreement_tol=1e-5) -> ConductivityResult
+    # cell: bool (True = solid, needs k_s, k_f) or float voxel conductivities; periodic in x, y, z
+ConductivityResult: .k_eff (energy form, symmetric) .k_eff_flux .k_eff_energy .agreement .eigenvalues
+    .mean (tr/3) .anisotropy ((lmax-lmin)/mean) .is_spd .relative() .as_row() .iterations .residuals
+    .preconditioner .wall_time .n_active .theta (3,nx,ny,nz) if return_fields
+effective_conductivity_tpms(params, n=48, k_s=None, k_f=None, *, cfg=None, offset=None, **kw)  # k from config
+extrapolated_conductivity_tpms(params, n=(32, 64), k_s=None, k_f=None, ...) -> ExtrapolatedConductivity
+    # .k_eff = (n2 K(n2) - n1 K(n1))/(n2 - n1), .coarse .fine .correction .mean .eigenvalues   <- PRODUCTION
+hashin_shtrikman_bounds(phi_s, k_s, k_f) -> (lower, upper); wiener_bounds(...); rayleigh_sc_spheres(phi, k_p, k_m)
+face_conductances(k), assemble_conduction_system(kf) -> (A, active)       # reusable for Task 7 strips
+richardson(n1,f1,n2,f2,p=1), observed_order(n3, f3), fit_convergence(n, f, p=1|None) -> ConvergenceFit
+```
+
+**Verification (all pass)**
+| Test | Result |
+|---|---|
+| Homogeneous cells (incl. 5×7×9, 1×4×3 grids) | exact to 1e-13, 0 iterations |
+| Two-phase laminates along x, y, z (k_f/k_s = 0.1, 1e-3); 13-layer random laminate | harmonic across / arithmetic along to 1e-9 (exact for harmonic faces) |
+| Laminate with k_f = 0 | k_across = 0, k_along = φ k_s exactly; fluid DOFs removed |
+| Flux vs energy k_eff | agree to ~1e-9 (TPMS), assertion verified to fire on a sloppy solve |
+| SPD, Wiener bounds | random 60 % cells at 3 contrasts |
+| HS bounds | G and D, ρ = 0.2/0.35/0.5, k_f/k_s = 1/325, 1e-3, 0 — all eigenvalues inside |
+| Near-isotropy G, D (n = 32, 48) | diagonal equal to 2e-4, off-diagonal < 1e-3, anisotropy < 2e-3 |
+| Invariances | periodic roll → identical; axis permutation → permuted tensor; k_f → 0 continuous |
+| SC sphere array vs Rayleigh (1892) | conducting spheres (α = 10): < 1 % at n = 48 (0.01–0.65 %); insulating: 0.4–2 %, halves with 2n |
+| Observed order (offset-averaged 16/32/64) | p ≈ 1 for G and D (slow test) |
+
+**Convergence (the important number).** The voxel staircase drops diagonal (edge/corner) contacts,
+so k_eff converges **from below, first order** (k(n) = k_∞ − C/n): offset-averaged triples
+24/48/96 give p_obs = 0.77–1.06 (8 cases). Reference k_ref = Richardson(48, 96, p = 1) on
+3-offset averages. Errors vs k_ref (`results/task2_convergence_summary.csv`), G/D, ρ = 0.2–0.5:
+
+| Estimator | max \|error\| over 8 cases | cost (n = 48 ≈ 1.6 s) |
+|---|---|---|
+| raw n = 32 | 5.8 – **17 %** low | 0.3 s |
+| raw n = 48 | 4.0 – **12 %** low | 1.6 s |
+| raw n = 64 | 3.0 – **8.3 %** low | 6 s |
+| R(32, 48) | 1.8 % | 2 s |
+| R(48, 64) | 2.3 % (noise amplified ×4) | 8 s |
+| **R(32, 64)** | **0.7 %** | **~6.5 s** |
+
+Error is largest at low ρ (more surface per solid volume), and larger for D than G.
+Alignment noise of a single offset-0 grid ≈ 0.1–0.5 % of k (rms around the 1/n fit).
+Uncertainty of k_ref itself (p = 1 vs observed p): ≤ 1.1 %.
+
+**Recommended resolution: two-grid Richardson R(32, 64) = `extrapolated_conductivity_tpms`**
+(error ≲ 1 % vs the reference; single grids are biased low by 3–17 %). If only one grid is
+affordable, n = 64 with a −(3–8) % bias. Use R(32, 64) for the Task 5 dataset.
+
+**Timings** (1 core of the build sandbox, Jacobi PCG, ρ = 0.35, full 3×3 tensor incl. assembly):
+n = 32: 0.3–0.5 s · **n = 48: 1.6–2.9 s** (target < 30 s ✅) · n = 64: 5.6–9.4 s · n = 96: ~25 s.
+Iterations ∝ n (G 179, D 178, blend 266 at n = 48). Blends are slowest. AMG not tested here (pyamg
+not installable in the sandbox; code path guarded, test skips).
+
+**Results — k_eff/k_s (R(32,64)), k_f/k_s = 1/325** (`results/task2_keff_vs_density.csv`)
+| ρ | 0.20 | 0.30 | 0.35 | 0.40 | 0.50 |
+|---|---|---|---|---|---|
+| Gyroid | 0.104 | 0.168 | 0.208 | 0.246 | 0.335 |
+| Diamond | 0.097 | 0.163 | 0.205 | 0.246 | 0.336 |
+| Blend w = 0.5 (mean eig.) | 0.057 | 0.097 | 0.117 | 0.191 | 0.308 |
+| HS upper | 0.145 | 0.225 | 0.267 | 0.311 | 0.401 |
+
+- G and D are within 0.5–7 % of each other, at 67–83 % of the HS upper bound; fraction rises with ρ.
+- Power-law fits over ρ = 0.2–0.5: G k/k_s ≈ 0.81 ρ^1.29, D ≈ 0.85 ρ^1.36 (config fluid);
+  k_f = 0: G 0.81 ρ^1.31, D 0.86 ρ^1.38. The fluid (k_f/k_s = 1/325) adds only 1–4 % to k_eff.
+
+**Open issues / notes for later tasks**
+1. **Blends are not isotropic (RQ2-relevant).** G and D share only the trigonal sub-symmetry, so
+   w = 0.5 gives a **uniaxial k_eff about [111]** (test-verified): at ρ = 0.3 eigenvalues
+   0.066 / 0.066 / 0.159 k_s. Below ρ ≈ 0.375 the blend conducts ~40 % of HS upper and is
+   strongly anisotropic; between ρ = 0.35 and 0.40 it jumps to ~60 % and becomes nearly
+   isotropic — the same pinch-neck topology change found in Task 1 (open issue 1). Consequences:
+   (a) Task 6 surrogates must predict the full tensor for 0 < w < 1 (the principal axes are
+   the cube diagonals, not x/y/z, so diagonal-only closures are wrong for blends);
+   (b) Task 9's 2-D jacket model must rotate/project this tensor into (r, s, z);
+   (c) graded designs crossing ρ ≈ 0.375 at mid w see a property discontinuity.
+2. **Staircase error will also hit Tasks 3 and 4** (voxel FEA stiffness and voxel Stokes are
+   first-order in h too). Plan for the same two-grid Richardson + offset-averaging study there;
+   `voxlat.homogenization.convergence` is ready. Tried and rejected: diagonal-only "laminate
+   composite voxels" (Kabel et al. 2015 idea without the off-diagonal terms) — no improvement
+   (G ρ = 0.3: 0.1582 vs 0.1596 binary at n = 48), because the dead staircase corners remain
+   poorly connected in a 7-point stencil. A full-tensor (27-point / FE) composite-voxel scheme
+   could fix it; not worth it while R(32, 64) costs 6 s.
+3. Anisotropic cells (a_z ≠ 1) work (grid n × n × round(n a_z)); at ρ = 0.3, n = 32: a_z = 1.5 gives
+   k_zz/k_xx = 1.53 (G) / 1.58 (D), a_z = 0.7 gives 0.68 / 0.58 — stretch matters as much as w.
+   The Richardson pair then refers to the in-plane n.
+4. Floating-point ties: G/D cyclic symmetry is exact mathematically but voxels exactly at the
+   threshold can flip by round-off, so diagonals agree to ~1e-4, not machine precision.
+5. Citations to verify: Hashin & Shtrikman 1962 (J. Appl. Phys. 33:3125); Rayleigh 1892
+   (Phil. Mag. 34:481) and Perrins, McKenzie & McPhedran 1979 (Proc. R. Soc. A 369:207) for the
+   sphere-array check; Kabel, Merkert & Schneider 2015 (CMAME 294:168) for composite voxels.
+6. Workspace: PyPI blocked again (no pyamg); numpy 2.5.3, scipy 1.18.1, Python 3.13.
+   Install `pip install -e ".[amg]"` on the laptop to get AMG; results must match Jacobi to 1e-6
+   (`test_amg_matches_jacobi`).
+
+**Figures** (`results/figures/`): `task2_keff_vs_density.png` (k_eff/k_s vs ρ for G, D, blend with HS
+bounds, config and k_f = 0; panel b = fraction of HS upper), `task2_convergence.png`
+(1/n plot of offset-0 grids; log-log offset-averaged error with slope −1).
+Data: `results/task2_keff_vs_density.csv`, `results/task2_convergence.csv`,
+`results/task2_convergence_summary.csv`, `results/task2_pytest_log.txt`.
+
+**Tests**: 170 passed + 1 skipped (pyamg) in ~2.5 min (Tasks 0–2, incl. slow); `pytest -m "not slow"` ~1.5 min.
 
 ## Task 3 — Elasticity homogenization
 _not started_

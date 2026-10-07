@@ -51,6 +51,7 @@ py -3.12 -m venv .venv
 python -m pip install --upgrade pip
 pip install -e .                  # core only (enough for Tasks 0-5, 7-10)
 pip install -e ".[ml,opt]"        # + torch, pymoo, botorch (needed from Task 6 / 11)
+pip install -e ".[amg]"           # optional: pyamg preconditioner (faster homogenization solves)
 ```
 
 If PowerShell refuses to run `Activate.ps1` ("running scripts is disabled"), run once:

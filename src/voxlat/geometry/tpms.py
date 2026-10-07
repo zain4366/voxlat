@@ -232,19 +232,28 @@ def level_set(xi_x: Any, xi_y: Any, xi_z: Any, w: float = 0.0) -> np.ndarray:
     return np.asarray(out, dtype=float)
 
 
-def _centres(n: int) -> np.ndarray:
-    """Voxel-centre angles 2 pi (k + 1/2) / n, k = 0 ... n-1 (exactly periodic)."""
-    return 2.0 * np.pi * (np.arange(n) + 0.5) / n
+def _centres(n: int, offset: float = 0.0) -> np.ndarray:
+    """Voxel-centre angles 2 pi ((k + 1/2) / n + offset), k = 0 ... n-1 (exactly periodic)."""
+    return 2.0 * np.pi * ((np.arange(n) + 0.5) / n + offset)
 
 
-def sample_level_set(shape: Sequence[int], w: float = 0.0) -> np.ndarray:
+def sample_level_set(
+    shape: Sequence[int], w: float = 0.0, offset: Sequence[float] | None = None
+) -> np.ndarray:
     """phi_w sampled at the voxel centres of one cell discretised as ``shape`` voxels.
 
     Separable evaluation: sin/cos are computed on 1-D axes and combined by
     broadcasting, so n = 128 (2.1 M voxels) takes ~0.1 s.
+
+    ``offset`` (cell units, default 0) rigidly shifts the TPMS relative to the
+    voxel grid: phi is sampled at xi = (k + 1/2)/n_i + offset_i. The continuum
+    geometry (and every homogenized property) is translation-invariant; the voxel
+    staircase is not. Task 2 uses random offsets to separate the systematic
+    O(1/n) discretization error from grid-alignment noise.
     """
     nx, ny, nz = (int(s) for s in shape)
-    tx, ty, tz = _centres(nx), _centres(ny), _centres(nz)
+    ox, oy, oz = (0.0, 0.0, 0.0) if offset is None else (float(v) for v in offset)
+    tx, ty, tz = _centres(nx, ox), _centres(ny, oy), _centres(nz, oz)
     sx, cx = np.sin(tx)[:, None, None], np.cos(tx)[:, None, None]
     sy, cy = np.sin(ty)[None, :, None], np.cos(ty)[None, :, None]
     sz, cz = np.sin(tz)[None, None, :], np.cos(tz)[None, None, :]
@@ -423,6 +432,7 @@ def voxelize(
     threshold: float | None = None,
     method: Literal["exact", "table"] = "exact",
     return_field: bool = False,
+    offset: Sequence[float] | None = None,
 ) -> np.ndarray | tuple[np.ndarray, np.ndarray, float]:
     """Boolean voxel cell (True = solid), shape ``grid_shape(params, n)``, exactly periodic.
 
@@ -439,9 +449,12 @@ def voxelize(
         "table": continuum c(w, rho) from the table -> density within O(n^-2).
     return_field:
         Also return the sampled level set phi and the threshold c.
+    offset:
+        Shift the TPMS relative to the grid by this many cell lengths along
+        (x, y, z) (see ``sample_level_set``); default None = no shift.
     """
     shape = grid_shape(params, n)
-    phi = sample_level_set(shape, params.w)
+    phi = sample_level_set(shape, params.w, offset)
     g = indicator_field(phi, params.kind)
     if threshold is not None:
         c = float(threshold)

@@ -1,0 +1,210 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.16, pytest-9.1.1, pluggy-1.6.0 -- /usr/bin/python
+cachedir: .pytest_cache
+rootdir: /home/claude/zain4366/voxlat
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1
+collecting ... collected 171 items
+
+tests/test_conduction.py::test_homogeneous_is_exact[True-shape0] PASSED
+tests/test_conduction.py::test_homogeneous_is_exact[True-shape1] PASSED
+tests/test_conduction.py::test_homogeneous_is_exact[True-shape2] PASSED
+tests/test_conduction.py::test_homogeneous_is_exact[False-shape0] PASSED
+tests/test_conduction.py::test_homogeneous_is_exact[False-shape1] PASSED
+tests/test_conduction.py::test_homogeneous_is_exact[False-shape2] PASSED
+tests/test_conduction.py::test_homogeneous_float_field PASSED
+tests/test_conduction.py::test_two_phase_laminate_exact[0.1-0] PASSED
+tests/test_conduction.py::test_two_phase_laminate_exact[0.1-1] PASSED
+tests/test_conduction.py::test_two_phase_laminate_exact[0.1-2] PASSED
+tests/test_conduction.py::test_two_phase_laminate_exact[0.001-0] PASSED
+tests/test_conduction.py::test_two_phase_laminate_exact[0.001-1] PASSED
+tests/test_conduction.py::test_two_phase_laminate_exact[0.001-2] PASSED
+tests/test_conduction.py::test_random_multilayer_laminate_exact PASSED
+tests/test_conduction.py::test_laminate_insulating_fluid_limit PASSED
+tests/test_conduction.py::test_floating_island_insulating_fluid PASSED
+tests/test_conduction.py::test_face_conductance_is_harmonic_and_periodic PASSED
+tests/test_conduction.py::test_matrix_is_symmetric_laplacian PASSED
+tests/test_conduction.py::test_random_cell_spd_and_flux_energy_agree[0.003076923076923077] PASSED
+tests/test_conduction.py::test_random_cell_spd_and_flux_energy_agree[0.001] PASSED
+tests/test_conduction.py::test_random_cell_spd_and_flux_energy_agree[0.0] PASSED
+tests/test_conduction.py::test_disagreement_is_detected PASSED
+tests/test_conduction.py::test_translation_and_permutation_invariance PASSED
+tests/test_conduction.py::test_continuity_to_insulating_limit PASSED
+tests/test_conduction.py::test_anisotropic_cell PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.003076923076923077-0.2-0.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.003076923076923077-0.2-1.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.003076923076923077-0.35-0.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.003076923076923077-0.35-1.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.003076923076923077-0.5-0.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.003076923076923077-0.5-1.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.001-0.2-0.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.001-0.2-1.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.001-0.35-0.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.001-0.35-1.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.001-0.5-0.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.001-0.5-1.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.0-0.2-0.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.0-0.2-1.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.0-0.35-0.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.0-0.35-1.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.0-0.5-0.0] PASSED
+tests/test_conduction.py::test_hashin_shtrikman_bounds_gyroid_diamond[0.0-0.5-1.0] PASSED
+tests/test_conduction.py::test_blend_within_wiener_bounds PASSED
+tests/test_conduction.py::test_near_isotropy_cubic_cells[32-0.0] PASSED
+tests/test_conduction.py::test_near_isotropy_cubic_cells[32-1.0] PASSED
+tests/test_conduction.py::test_near_isotropy_cubic_cells[48-0.0] PASSED
+tests/test_conduction.py::test_near_isotropy_cubic_cells[48-1.0] PASSED
+tests/test_conduction.py::test_blend_is_uniaxial_about_111 PASSED
+tests/test_conduction.py::test_sc_sphere_array_vs_rayleigh[0.05] PASSED
+tests/test_conduction.py::test_sc_sphere_array_vs_rayleigh[0.15] PASSED
+tests/test_conduction.py::test_sc_sphere_array_vs_rayleigh[0.3] PASSED
+tests/test_conduction.py::test_convergence_from_below_gyroid PASSED
+tests/test_conduction.py::test_observed_order_is_one[0.0] PASSED
+tests/test_conduction.py::test_observed_order_is_one[1.0] PASSED
+tests/test_conduction.py::test_extrapolated_close_to_reference PASSED
+tests/test_conduction.py::test_timing_n48_under_30s 
+n=48 blend: 2.67 s total, iterations [266, 266, 266], pc=jacobi
+PASSED
+tests/test_conduction.py::test_amg_matches_jacobi SKIPPED (pyamg not...)
+tests/test_conduction.py::test_bad_inputs PASSED
+tests/test_conduction.py::test_result_row_and_fields PASSED
+tests/test_conduction.py::test_hs_bounds_formulas PASSED
+tests/test_conduction.py::test_convergence_helpers_recover_synthetic PASSED
+tests/test_config.py::test_config_file_exists PASSED
+tests/test_config.py::test_config_loads_and_is_typed PASSED
+tests/test_config.py::test_config_is_frozen PASSED
+tests/test_config.py::test_reference_numbers_si PASSED
+tests/test_config.py::test_mean_heat_flux PASSED
+tests/test_config.py::test_heat_flux_shape PASSED
+tests/test_config.py::test_heat_flux_integrates_to_Q_trapezoid[51] PASSED
+tests/test_config.py::test_heat_flux_integrates_to_Q_trapezoid[201] PASSED
+tests/test_config.py::test_heat_flux_integrates_to_Q_trapezoid[1001] PASSED
+tests/test_config.py::test_heat_flux_integrates_to_Q_quadrature PASSED
+tests/test_config.py::test_profile_conserves_Q_for_any_amplitude[0.0] PASSED
+tests/test_config.py::test_profile_conserves_Q_for_any_amplitude[0.25] PASSED
+tests/test_config.py::test_profile_conserves_Q_for_any_amplitude[0.5] PASSED
+tests/test_config.py::test_profile_conserves_Q_for_any_amplitude[0.9] PASSED
+tests/test_config.py::test_heat_flux_rejects_out_of_range PASSED
+tests/test_config.py::test_unknown_key_rejected PASSED
+tests/test_config.py::test_missing_key_rejected PASSED
+tests/test_config.py::test_inconsistent_value_rejected PASSED
+tests/test_config.py::test_overrides PASSED
+tests/test_config.py::test_env_var_path PASSED
+tests/test_tpms.py::test_params_validation_and_design_constructor PASSED
+tests/test_tpms.py::test_normalization_both_span_unit_amplitude PASSED
+tests/test_tpms.py::test_rms_amplitudes_are_comparable PASSED
+tests/test_tpms.py::test_level_set_is_odd_and_periodic[0.0] PASSED
+tests/test_tpms.py::test_level_set_is_odd_and_periodic[0.37] PASSED
+tests/test_tpms.py::test_level_set_is_odd_and_periodic[1.0] PASSED
+tests/test_tpms.py::test_sampled_field_matches_pointwise_level_set PASSED
+tests/test_tpms.py::test_tiling_equals_supercell_sampling[0.0-a0] PASSED
+tests/test_tpms.py::test_tiling_equals_supercell_sampling[1.0-a1] PASSED
+tests/test_tpms.py::test_tiling_equals_supercell_sampling[0.5-a2] PASSED
+tests/test_tpms.py::test_no_duplicated_boundary_layer PASSED
+tests/test_tpms.py::test_anisotropic_grid_and_stretch PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.2-0.0-network] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.2-0.0-sheet] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.2-0.5-network] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.2-0.5-sheet] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.2-1.0-network] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.2-1.0-sheet] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.35-0.0-network] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.35-0.0-sheet] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.35-0.5-network] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.35-0.5-sheet] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.35-1.0-network] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.35-1.0-sheet] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.5-0.0-network] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.5-0.0-sheet] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.5-0.5-network] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.5-0.5-sheet] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.5-1.0-network] PASSED
+tests/test_tpms.py::test_density_within_half_percent[0.5-1.0-sheet] PASSED
+tests/test_tpms.py::test_bisection_hits_closest_achievable_density[0.27] PASSED
+tests/test_tpms.py::test_bisection_hits_closest_achievable_density[0.31] PASSED
+tests/test_tpms.py::test_bisection_hits_closest_achievable_density[0.444] PASSED
+tests/test_tpms.py::test_odd_fields_give_zero_threshold_at_half_density PASSED
+tests/test_tpms.py::test_threshold_table_reproduces_density[network] PASSED
+tests/test_tpms.py::test_threshold_table_reproduces_density[sheet] PASSED
+tests/test_tpms.py::test_threshold_table_vectorized_and_monotone PASSED
+tests/test_tpms.py::test_shipped_table_matches_rebuild PASSED
+tests/test_tpms.py::test_minimal_surface_area_per_cell[0.0-3.0915] PASSED
+tests/test_tpms.py::test_minimal_surface_area_per_cell[1.0-3.8377] PASSED
+tests/test_tpms.py::test_surface_area_convergence_second_order PASSED
+tests/test_tpms.py::test_sheet_surface_is_two_walls PASSED
+tests/test_tpms.py::test_network_cells_have_one_solid_and_one_fluid[0.2-0.0] PASSED
+tests/test_tpms.py::test_network_cells_have_one_solid_and_one_fluid[0.2-0.5] PASSED
+tests/test_tpms.py::test_network_cells_have_one_solid_and_one_fluid[0.2-1.0] PASSED
+tests/test_tpms.py::test_network_cells_have_one_solid_and_one_fluid[0.35-0.0] PASSED
+tests/test_tpms.py::test_network_cells_have_one_solid_and_one_fluid[0.35-0.5] PASSED
+tests/test_tpms.py::test_network_cells_have_one_solid_and_one_fluid[0.35-1.0] PASSED
+tests/test_tpms.py::test_network_cells_have_one_solid_and_one_fluid[0.5-0.0] PASSED
+tests/test_tpms.py::test_network_cells_have_one_solid_and_one_fluid[0.5-0.5] PASSED
+tests/test_tpms.py::test_network_cells_have_one_solid_and_one_fluid[0.5-1.0] PASSED
+tests/test_tpms.py::test_sheet_cell_splits_the_fluid_in_two PASSED
+tests/test_tpms.py::test_compute_metrics_gyroid_reference_values PASSED
+tests/test_tpms.py::test_thickness_scales_with_density PASSED
+tests/test_tpms.py::test_check_manufacturable_cases PASSED
+tests/test_tpms.py::test_min_cell_size_structure PASSED
+tests/test_tpms.py::test_feasible_region_agrees_with_direct_check PASSED
+tests/test_tpms.py::test_offset_by_whole_voxels_is_a_roll PASSED
+tests/test_utils.py::test_subpackages_import[geometry] PASSED
+tests/test_utils.py::test_subpackages_import[homogenization] PASSED
+tests/test_utils.py::test_subpackages_import[closures] PASSED
+tests/test_utils.py::test_subpackages_import[surrogates] PASSED
+tests/test_utils.py::test_subpackages_import[device] PASSED
+tests/test_utils.py::test_subpackages_import[optimize] PASSED
+tests/test_utils.py::test_subpackages_import[export] PASSED
+tests/test_utils.py::test_subpackages_import[utils] PASSED
+tests/test_utils.py::test_repo_layout PASSED
+tests/test_utils.py::test_set_seed_reproducible PASSED
+tests/test_utils.py::test_get_logger_single_handler PASSED
+tests/test_utils.py::test_run_record_contents PASSED
+tests/test_utils.py::test_stopwatch_monotonic PASSED
+tests/test_utils.py::test_save_figure_300dpi PASSED
+tests/test_voxel_tools.py::test_surface_area_of_flat_slab_is_exact PASSED
+tests/test_voxel_tools.py::test_surface_area_of_sphere_converges_and_staircase_does_not PASSED
+tests/test_voxel_tools.py::test_surface_area_counts_wrapped_cubes PASSED
+tests/test_voxel_tools.py::test_periodic_edt_matches_brute_force PASSED
+tests/test_voxel_tools.py::test_interface_distance_subvoxel_for_plane PASSED
+tests/test_voxel_tools.py::test_local_thickness_calibration[cylinder] PASSED
+tests/test_voxel_tools.py::test_local_thickness_calibration[slab] PASSED
+tests/test_voxel_tools.py::test_local_thickness_without_level_set_is_reasonable PASSED
+tests/test_voxel_tools.py::test_throat_of_rod_network PASSED
+tests/test_voxel_tools.py::test_throat_zero_for_non_percolating_phase PASSED
+tests/test_voxel_tools.py::test_components_slab_ball_rod PASSED
+tests/test_voxel_tools.py::test_components_counts_and_fractions PASSED
+tests/test_voxel_tools.py::test_rod_network_is_3d_connected_and_complement_too PASSED
+tests/test_voxel_tools.py::test_diagonal_contact_6_vs_26 PASSED
+tests/test_voxel_tools.py::test_staircase_diagonal_rod_wraps_along_110 PASSED
+tests/test_voxel_tools.py::test_random_media_component_count_matches_tiled_labelling[6] PASSED
+tests/test_voxel_tools.py::test_random_media_component_count_matches_tiled_labelling[26] PASSED
+
+=============================== warnings summary ===============================
+tests/test_tpms.py: 48 warnings
+  /usr/local/lib/python3.13/dist-packages/skimage/measure/_marching_cubes_lewiner.py:237: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.
+  As an alternative, you can create a new view using np.reshape (with copy=False if needed).
+    ar.shape = shape
+
+tests/test_tpms.py: 46 warnings
+tests/test_voxel_tools.py: 20 warnings
+  /usr/local/lib/python3.13/dist-packages/skimage/measure/_marching_cubes_lewiner.py:213: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.
+  As an alternative, you can create a new view using np.reshape (with copy=False if needed).
+    faces.shape = -1, 3
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 10 durations =============================
+57.40s call     tests/test_tpms.py::test_feasible_region_agrees_with_direct_check
+17.67s call     tests/test_conduction.py::test_observed_order_is_one[0.0]
+16.07s call     tests/test_conduction.py::test_observed_order_is_one[1.0]
+7.18s call     tests/test_tpms.py::test_check_manufacturable_cases
+5.63s call     tests/test_conduction.py::test_extrapolated_close_to_reference
+4.89s call     tests/test_tpms.py::test_compute_metrics_gyroid_reference_values
+2.94s call     tests/test_conduction.py::test_sc_sphere_array_vs_rayleigh[0.05]
+2.84s call     tests/test_conduction.py::test_sc_sphere_array_vs_rayleigh[0.15]
+2.77s call     tests/test_conduction.py::test_sc_sphere_array_vs_rayleigh[0.3]
+2.67s call     tests/test_conduction.py::test_timing_n48_under_30s
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_conduction.py:292: pyamg not installed
+=========== 170 passed, 1 skipped, 114 warnings in 142.31s (0:02:22) ===========

@@ -313,3 +313,16 @@ def test_feasible_region_agrees_with_direct_check():
                 assert rep.ok == expect, (w, rho, L, rep)
                 checked += 1
     assert checked == 12
+
+
+def test_offset_by_whole_voxels_is_a_roll():
+    """Task 2 addition: a grid offset of k/n cell lengths equals np.roll by -k voxels."""
+    p = TPMSParams(w=0.3, rho=0.35)
+    n = 24
+    base = voxelize(p, n)
+    shifted = voxelize(p, n, offset=(2 / n, 0.0, -1 / n))
+    # identical up to voxels whose field value ties the threshold (round-off in sin/cos)
+    mismatch = np.mean(shifted != np.roll(base, (-2, 1), axis=(0, 2)))
+    assert mismatch < 2e-3, mismatch
+    other = voxelize(p, n, offset=(0.37 / n, 0.11, 0.5))  # generic shift keeps the density
+    assert abs(other.mean() - 0.35) < 1e-3

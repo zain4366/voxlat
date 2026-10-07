@@ -32,6 +32,8 @@ dependencies = [
 [project.optional-dependencies]
 ml = ["torch>=2.2"]
 opt = ["pymoo>=0.6.1", "botorch>=0.11"]
+# optional AMG preconditioner for the homogenization solvers (Task 2+); Jacobi is used without it
+amg = ["pyamg>=5.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
