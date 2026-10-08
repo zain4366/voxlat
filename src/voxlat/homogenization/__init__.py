@@ -1,6 +1,6 @@
 """Periodic homogenization solvers on voxel cells: conduction (k_eff, Task 2),
-elasticity (C_eff + stress localization, Task 3), Stokes permeability (K, Task 4)
-and finite-gap strips (Task 7).
+elasticity (C_eff + stress localization, Task 3), Stokes permeability (K, Task 4,
+staggered MAC + MINRES) and finite-gap strips (Task 7).
 
 >>> import numpy as np
 >>> from voxlat.homogenization import effective_conductivity
@@ -30,6 +30,16 @@ from voxlat.homogenization.elasticity import (
     isotropic_stiffness,
     laminate_stiffness,
 )
+from voxlat.homogenization.stokes import (
+    ExtrapolatedPermeability,
+    PermeabilityResult,
+    assemble_stokes_system,
+    extrapolated_permeability_tpms,
+    kozeny_constant,
+    permeability,
+    permeability_tpms,
+    solve_stokes,
+)
 from voxlat.homogenization.convergence import (
     ConvergenceFit,
     fit_convergence,
@@ -54,6 +64,14 @@ __all__ = [
     "hashin_shtrikman_porous",
     "isotropic_stiffness",
     "laminate_stiffness",
+    "ExtrapolatedPermeability",
+    "PermeabilityResult",
+    "assemble_stokes_system",
+    "extrapolated_permeability_tpms",
+    "kozeny_constant",
+    "permeability",
+    "permeability_tpms",
+    "solve_stokes",
     "ConvergenceFit",
     "fit_convergence",
     "observed_order",

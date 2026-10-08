@@ -111,22 +111,34 @@ Background and design decisions: [docs/task1_explained.md](docs/task1_explained.
 The precomputed tables in `src/voxlat/geometry/data/` are rebuilt with
 `python scripts/task1_build_tables.py` (only needed if the geometry definitions change).
 
-## Homogenization (Tasks 2-3)
+## Homogenization (Tasks 2-4)
 
 ```python
 from voxlat.geometry import TPMSParams
-from voxlat.homogenization import extrapolated_conductivity_tpms, extrapolated_elasticity_tpms
+from voxlat.homogenization import (
+    extrapolated_conductivity_tpms, extrapolated_elasticity_tpms, extrapolated_permeability_tpms,
+)
 
 p = TPMSParams(w=0.0, rho=0.35)
 k = extrapolated_conductivity_tpms(p)        # k_eff 3x3 [W/(m K)], Richardson R(32, 64)
 c = extrapolated_elasticity_tpms(p)          # C_eff 6x6 Voigt [Pa], Richardson R(32, 64), ~1 min
 c.C_eff, c.youngs_moduli, c.zener_ratio
 c.fine.localization["uniaxial_z"].p99        # von Mises stress concentration (n = 64 grid)
+K = extrapolated_permeability_tpms(p)        # Stokes permeability 3x3 in units of L^2, ~15 s
+K.K, K.porosity, K.tortuosity                # multiply K by L^2 [m^2] for physical units
 ```
 
 Voigt order is xx, yy, zz, yz, xz, xy with engineering shear strains; see the
 `voxlat.homogenization.elasticity` docstring. Figures: `python scripts/task3_stiffness_vs_density.py`,
 convergence study: `python scripts/task3_convergence.py` (both take `--quick`).
+
+Permeability (Task 4): staggered (MAC) finite volumes on the voxels, no slip on every
+solid face, solved with block-preconditioned MINRES; the `voxlat.homogenization.stokes`
+docstring has the equations. Any periodic bool cell works too:
+`permeability(cell, voxel_size=h)` returns K in units of h². Gyroid/diamond need one solve
+(cubic symmetry), blends three. Scripts (all take `--quick`):
+`scripts/task4_verification.py` (Poiseuille, ducts, inclined slits, sphere arrays vs
+Zick & Homsy), `scripts/task4_convergence.py`, `scripts/task4_permeability_vs_porosity.py`.
 
 ## Conventions
 

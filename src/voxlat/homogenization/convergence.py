@@ -98,17 +98,21 @@ def fit_convergence(
         )
     if n.size < 4:
         raise ValueError("a free-order fit needs at least 4 resolutions")
-    lin = fit_convergence(n, f, p=1.0)
+    # Fit in normalized units: curve_fit's default tolerances are absolute-ish and it
+    # stalls at p0 when |f| << 1 (e.g. permeabilities K/L^2 ~ 1e-3; found in Task 4).
+    scale = float(np.max(np.abs(f))) or 1.0
+    g = f / scale
+    lin = fit_convergence(n, g, p=1.0)
 
     def model(x: np.ndarray, a: float, c: float, q: float) -> np.ndarray:
         return a + c * x ** (-q)
 
     popt, pcov = curve_fit(
-        model, n, f, p0=(lin.f_inf, lin.C, 1.0),
+        model, n, g, p0=(lin.f_inf, lin.C, 1.0),
         bounds=([-np.inf, -np.inf, 0.25], [np.inf, np.inf, 4.0]), maxfev=20000,
     )
-    res = f - model(n, *popt)
+    res = g - model(n, *popt)
     return ConvergenceFit(
-        float(popt[0]), float(popt[1]), float(popt[2]), float(np.sqrt(abs(pcov[0, 0]))),
-        float(np.sqrt(np.mean(res**2))), False,
+        float(popt[0] * scale), float(popt[1] * scale), float(popt[2]),
+        float(np.sqrt(abs(pcov[0, 0])) * scale), float(np.sqrt(np.mean(res**2)) * scale), False,
     )

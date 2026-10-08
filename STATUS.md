@@ -10,7 +10,7 @@ Plan: project doc `claude/voxlat_task_plan.md`. Reference numbers: `configs/refe
 | 1 | TPMS unit-cell geometry | **done** (2026-10-08) |
 | 2 | Conduction homogenization k_eff | **done** (2026-10-08) |
 | 3 | Elasticity homogenization C_eff | **done** (2026-10-08) |
-| 4 | Stokes permeability K | not started |
+| 4 | Stokes permeability K | **done** (2026-10-08) |
 | 5 | Closure dataset | not started |
 | 6 | Closure surrogates | not started |
 | 7 | Finite-gap study (RQ1) | not started |
@@ -511,8 +511,175 @@ anisotropy A^U incl. blend), `task3_localization_vs_density.png` (p99/max/mean, 
 
 **Tests**: 216 passed + 2 skipped (pyamg) in 4.5 min (Tasks 0–3, incl. slow); Task 3 alone 46 + 1 skipped.
 
-## Task 4 — Stokes permeability
-_not started_
+## Task 4 — Stokes permeability  ✅
+
+**Built**
+- `src/voxlat/homogenization/stokes.py` — periodic creeping-flow (Stokes) permeability K (3×3) of any
+  bool voxel cell: staggered **MAC finite volumes** (p at fluid-cell centres, u_d on voxel faces), no slip /
+  no penetration on every solid–fluid voxel face, unit body force e_j, **MINRES** on the symmetric
+  saddle-point system with the block-diagonal preconditioner diag(A_hat, I) (A_hat = Jacobi, or one pyamg
+  SA V-cycle if installed). Outputs K, staggered velocity and pressure fields, porosity, mean interstitial
+  velocity, mean speed, hydraulic tortuosity. Flux and energy forms of K are both computed and checked.
+  Verification geometries + analytic references live in the same module.
+- `src/voxlat/homogenization/convergence.py`: the free-order fit (`fit_convergence(..., p=None)`) now fits
+  in normalized units (bug fix, see open issue 6).
+- Scripts: `scripts/task4_verification.py` (~2 min, 2 cores), `scripts/task4_convergence.py` (~11 min, 2 cores,
+  incl. four n = 96 anchors, ~1.5 GB each), `scripts/task4_permeability_vs_porosity.py` (~9 min, 2 cores). All take `--quick`; the first two also `--replot`.
+- `voxlat.homogenization` exports the Stokes API; README "Homogenization (Tasks 2-4)" updated.
+- Tests: `tests/test_stokes.py` (50 incl. 6 `slow`; the AMG test skips without pyamg),
+  + 3 scale-invariance regression tests in `tests/test_conduction.py`.
+
+**Method choice (justification, also in the module docstring)**
+- MAC: the wall sits exactly on the same voxel faces as in Tasks 2–3; wall-normal velocity is zero *at* the
+  wall (exact no-penetration); tangential no-slip by the mirror ghost u_g = −u where a flat wall lies h/2 away
+  (standard 2nd-order MAC, Manwart et al. 2002), u = 0 at distance h at staircase steps. No tuning parameter.
+- MINRES + diag(Jacobi, pressure mass) is the classic block preconditioner for Stokes (Silvester & Wathen 1994);
+  iterations grow ∝ n with Jacobi but the cost stays far inside the 2-min target (table below).
+- Rejected: FFT-Brinkman (penalty boundary layer O(√ε), Gibbs ringing at the solid indicator, conditioning
+  ∝ 1/ε); Uzawa / augmented Lagrangian (nested inner velocity solves); sparse LU (3-D fill: GBs at n = 48);
+  lattice Boltzmann (O(n²) time steps to steady state in numpy).
+- **Reported K = symmetrized flux form** (K_ij = ⟨u_i^(j)⟩): its error is quadratic in the solver residual
+  (compliance functional), measured 3e-8 relative at tol 1e-8 (gyroid n = 48); the energy form
+  u^(i)ᵀA u^(j)/N (Gram matrix, PSD by construction) is linear in the residual (4e-7 G/D … 1e-4 blends) and
+  is used as the check: `agreement_tol = 1e-3` (a sloppy tol = 1e-4 solve disagrees by 1.4e-2 and raises).
+- MINRES `tol` is scipy's backward-error test, not ‖r‖/‖b‖: tol 1e-8 → true relative residual ~1e-4,
+  K converged to ~1e-7. Default tol 1e-8.
+
+**Public API (`voxlat.homogenization.stokes`; main names also in `voxlat.homogenization`)**
+```python
+permeability(cell, *, voxel_size=1.0, symmetry="none"|"cubic"|"tetragonal_z", directions=None, tol=1e-8,
+             preconditioner="auto"|"amg"|"jacobi", maxiter=None, return_fields=False, check=True,
+             agreement_tol=1e-3) -> PermeabilityResult
+    # cell: bool (True = solid), periodic; K in units of voxel_size^2 (1/n -> L^2; L/n in m -> m^2)
+PermeabilityResult: .K (3x3) .K_flux .K_energy .agreement .porosity .interstitial_velocity (3x3, col j = <u>_f)
+    .mean_speed{j} .tortuosity{j} (NaN if no net flow) .eigenvalues .mean .is_spd .anisotropy .as_row()
+    .iterations .residuals (true ||r||/||b||) .divergence .n_dofs .n_pressure_components .wall_time
+    .velocity (n_dirs,3,nx,ny,nz) float32 staggered (+d face) .pressure (n_dirs,nx,ny,nz)  [return_fields]
+    .cell_velocity(k) -> (3,nx,ny,nz) cell-centred
+permeability_tpms(params, n=48, *, offset=None, symmetry="auto", **kw)        # K in L^2; G/D: 1 solve, blends: 3
+tpms_symmetry(params) -> "cubic" (w in {0,1}, a = 1) | "tetragonal_z" (a_x = a_y != a_z) | "none" (blends)
+extrapolated_permeability_tpms(params, n=(32, 64), *, p=1.0, offset=None) -> ExtrapolatedPermeability  <- PRODUCTION
+    # .K .coarse .fine .correction .porosity .tortuosity .mean .eigenvalues
+averaged_permeability_tpms(params, n=48, n_offsets=3, seed=2026) -> AveragedPermeability(.K, .K_std, ...)
+assemble_stokes_system(solid) -> StokesSystem(A, D, saddle, active, face_id, offsets, pressure_id, ...)
+solve_stokes(system, force, *, tol, maxiter, preconditioner) -> StokesSolution(u, p, iterations, residual, divergence)
+kozeny_constant(K, porosity, a_sf) = phi^3 / (K a_sf^2)
+# references / verification geometries
+slit_permeability(H) = H^2/12; mac_slit_permeability(H) = (H^2+2)/12; rectangular_duct_mean_velocity(a, b)
+ZICK_HOMSY_SC (table), zick_homsy_sc_drag(c) (PCHIP, log-log), sangani_acrivos_sc_drag(c), sc_sphere_permeability(c, K*)
+sphere_array_cell(n, c, match_volume=True); inclined_slit_cell(N, porosity, slope, nz); inclined_slit_reference(...)
+```
+`assemble_stokes_system`/`permeability` take any periodic bool cell, so Task 7's strips (lattice between
+solid wall layers) need no new solver: the strip walls are grid-aligned, i.e. 2nd-order exact.
+
+**Verification (all pass; `results/task4_verification_*.csv`, figure `task4_verification.png`)**
+| Case | Result |
+|---|---|
+| (a) Plane Poiseuille, H = 1…64 fluid voxels, walls ⟂ x, y, z, thick walls, 1-voxel axes | K = (H²+2)/12·φ **exactly** (1e-15); profile u_j = (y_j(H−y_j)+¼)/2 exact; K across = 0; T = 1 |
+| (a) vs continuum H²/12 | error **+2/H²** (H = 8: 3.1 %, 16: 0.78 %, 32: 0.20 %), observed order 2.000 |
+| (b) Square duct vs series (0.0351443 a²G/μ) | +5.9 / 1.5 / 0.38 / 0.094 % at 8 / 16 / 32 / 64 voxels; order 2.0; R(16,32) p=2 → < 0.03 % |
+| (b) 2:1 duct | +3.9 / 0.98 / 0.25 / 0.06 %, order 2.0 |
+| (b) Inclined slit 45° (φ = 0.5) | exactly −4/N² along the slit, +8/N² along z → 2nd order (symmetric staircase) |
+| (b) Inclined slit 1:2, 1:3 (generic wall) | **1st order**: K error ≈ −0.20 h/H (1:2), −0.26 h/H (1:3) (H = fluid-layer thickness) → effective wall shift ≈ 0.05 h into the fluid per wall; −1.1 % at H = 18 voxels |
+| (c) SC sphere arrays vs Zick & Homsy (1982), c = 0.027, 0.064, 0.125, 0.216, 0.343, 0.45 | at the realized voxel fraction: **−0.3 … −0.9 % for every n = 32–64**, n = 24 within ±1.1 %; full tensor isotropic to 1e-6 |
+| (c) same, vs the target c | ±1–4 % at n ≤ 32 — the voxel shell structure misses c by up to 7 % and d ln K/d ln c ≈ −1…−1.3, so always compare at the realized c |
+| Sangani & Acrivos (1982) series vs Zick & Homsy | ≤ 0.8 % for c ≤ 0.216 (reference data cross-check) |
+| Sealed cavities | add porosity, carry no flow (u ≤ 1e-9 max), K unchanged; fully closed cell → K = 0, T = NaN |
+| Symmetry | G, D: full 3-direction K = k I to 1.4e-3 at n = 24 (voxel alignment) → `symmetry="cubic"` valid; blend w = 0.5: K = aI + b(J−I), non-degenerate axis [111] (trigonal); stretched a_z = 1.5: tetragonal, K_zz > 1.1 K_xx |
+| Invariances | periodic roll and axis permutation ↔ tensor rotation to 1e-6 |
+| Fields | staggered mean = K; discrete div u ≤ 1e-3 max|u| (true residual ~1e-4); u = 0 on all faces touching solid |
+| (d) TPMS convergence (slow test) | offset-averaged G ρ* = 0.35, n = 16…64: every n ≥ 32 within 1.5 % of the fit, R(32,64) within 0.5 % |
+
+**Convergence (n = 16–64, 4 grid offsets each; G/D × ρ* = 0.2/0.35/0.5 + blend w = 0.5, ρ* = 0.35;
+`results/task4_convergence_summary.csv`)**
+Reference = fit K_inf + C/n to offset-averaged n = 32–64. **Independent n = 96 check** (2 offsets, ρ* = 0.35):
+the fit predicts n = 96 to **0.18 % (G) and 0.46 % (D)** → reference good to ~±0.5 %.
+- Unlike k_eff (Task 2: 3–17 % low), the permeability staircase error is **small**: offset-averaged K is low
+  by 0.0–0.8 % at n = 32 and 0.1–0.6 % at n = 48 (diamond ρ* = 0.5, the narrowest pores: −2.4 % / −1.7 %).
+  Flow is not blocked by the staircase, the effective wall moves only ~0.05 h (inclined-slit result).
+- Systematic error and alignment noise (0.1–0.7 % std at n = 32–48) are the same size, so the free order is
+  not identifiable (normalized free fits hit the 0.25 / 4 bounds in 6 of 7 cases); p = 1 is used, as in Tasks 2–3.
+- Tortuosity converges faster, from below: offset-averaged within 0.3 % from n = 32 on, 0.15 % at n = 48–64.
+- Max |error| over the 7 cases on the default grid (offset 0):
+
+| Estimator | cost per direction (G/D, 1 core) | max \|error\| | all but D ρ* = 0.5 |
+|---|---|---|---|
+| raw n = 32 | ~1 s | 3.2 % | 0.9 % |
+| raw n = 48 | 3–4 s | 1.6 % | 0.9 % |
+| raw n = 64 | 13–18 s | 1.1 % | 0.4 % |
+| 3 offsets n = 48 | 8–13 s | 1.7 % | 0.6 % |
+| R(24, 48) | 3–5 s | 1.2 % | 1.2 % |
+| R(48, 64) | 16–22 s | 1.5 % | 1.5 % |
+| **R(32, 64)** | **14–19 s** | **1.0 %** | **0.35 %** |
+
+**Recommended: `extrapolated_permeability_tpms(params, (32, 64))`** — ≤ 1 % everywhere, same grid pair as
+Tasks 2–3 (Task 5 can voxelize once). Cheap alternative: raw n = 48 (≤ 1.6 % low, mostly ≤ 0.9 %).
+
+**Timings** (1 sandbox core, nothing else running, Jacobi, ρ* = 0.3, ONE body-force direction incl. assembly)
+| n | DOFs | G | D | blend | iterations G / D / blend | peak RAM |
+|---|---|---|---|---|---|---|
+| 32 | 89 k | 1.0 s | 0.7 s | 1.4 s | 378 / 283 / 573 | 0.13 GB |
+| **48** | **304 k** | **4.3 s** | **2.7 s** | **6.8 s** | 554 / 356 / 902 | 0.25 GB (**target ≤ 2 min ✅, 17–40× margin**) |
+| 64 | 725 k | 18 s | 13 s | 26 s | 784 / 519 / 1206 | 0.5 GB |
+| 96 | 2.46 M | 114 s | 72 s | – | 1252 / 800 | 1.5 GB |
+Iterations ∝ n (Jacobi), cost ∝ n^4. Two parallel workers slow each ~1.3–1.5× (memory bandwidth). Production
+R(32, 64): G ~19 s, D ~13 s per sample (one solve each, cubic symmetry), blends ~85 s (three directions).
+pyamg should cut the iteration count (untested here).
+
+**Results (R(32, 64); `results/task4_permeability_vs_porosity.csv`)**
+| ρ* (φ) | 0.20 (0.80) | 0.30 (0.70) | 0.35 (0.65) | 0.40 (0.60) | 0.50 (0.50) |
+|---|---|---|---|---|---|
+| Gyroid K/L² | 1.030e-2 | 6.214e-3 | 4.887e-3 | 3.829e-3 | 2.224e-3 |
+| Diamond K/L² | 6.651e-3 | 4.010e-3 | 3.103e-3 | 2.390e-3 | 1.410e-3 |
+| Blend w = 0.5, mean (min–max) ×1e-3 | 10.49 (9.83–11.81) | 5.57 (5.26–6.20) | 4.04 (3.89–4.33) | 2.95 (2.89–3.06) | 1.39 (1.24–1.71) |
+| Kozeny c_K G / D / blend | 7.76 / 7.95 / 7.72 | 6.72 / 6.81 / 6.72 | 6.37 / 6.53 / 6.39 | 6.12 / 6.35 / 6.14 | 5.87 / 6.01 / 6.66 |
+| Tortuosity G / D / blend | 1.12 / 1.14 / 1.09 | 1.16 / 1.19 / 1.13 | 1.18 / 1.21 / 1.16 | 1.20 / 1.24 / 1.20 | 1.24 / 1.29 / 1.31 |
+
+- Power laws over ρ* = 0.2–0.5: **G K/L² ≈ 0.0202 φ^3.22, D ≈ 0.0132 φ^3.29**. Diamond is ~35–37 % less
+  permeable than gyroid at equal porosity (smaller pores and throats, Task 1).
+- **Kozeny–Carman collapse**: c_K = φ³/(K a_sf²) is nearly topology-independent — G, D and the blend agree
+  within ~4 % at equal φ for φ ≥ 0.5 (G vs D 7 % at φ = 0.45; blend +11 % at ρ* = 0.5), c_K falling from ~9
+  (φ = 0.85) to ~6 (φ = 0.5), above Carman's 5 for packed beds. So K ≈ φ³/(c_K(φ) a_sf²) with the Task 1 a_sf is a good physics prior for
+  Task 6 (or a check on its surrogates).
+- Physical scale: K = (K/L²)·L²; e.g. gyroid ρ* = 0.35, L = 4 mm → K = 7.8e-8 m².
+
+**Open issues / notes for later tasks**
+1. **Blend K is trigonal and non-monotone in anisotropy (RQ2-relevant).** w = 0.5: (K_max−K_min)/K_mean ≈ 0.19
+   at ρ* ≤ 0.25, a minimum 0.06 at ρ* = 0.4, then 0.34 / 0.55 at ρ* = 0.5 / 0.55 — the same pinch topology change
+   seen in Tasks 1–3, here on the fluid side at high ρ*. Task 6 must predict the full tensor for 0 < w < 1 (axis
+   [111]); Task 9 must rotate it into (r, s, z). Unlike stiffness, permeability does **not** collapse for blends at
+   low ρ* (blend ≈ gyroid there), so blends are a flow-vs-structure trade-off, not simply worse.
+2. Stretched cells: tetragonal K (`tpms_symmetry` → two solves). K_zz/K_xx for a_z ≠ 1 is not tabulated yet — Task 5
+   samples it.
+3. Creeping-flow only: K is the Darcy (Re → 0) permeability. Inertial (Forchheimer) corrections come from
+   literature in Task 8; state this in the paper's limitations.
+4. For Task 7: strip walls aligned with the grid are 2nd-order exact (Poiseuille / duct tests), so finite-gap
+   errors measured there will be lattice physics, not discretization; keep the lattice at n ≥ 32 per cell.
+5. AMG path untested (pyamg not installable here): `preconditioner="amg"` uses a symmetric-Gauss-Seidel SA V-cycle
+   on the velocity block (SPD, as MINRES requires); `test_amg_matches_jacobi` checks it on the laptop.
+6. **Bug fix in a shared helper:** `fit_convergence(..., p=None)` stalled at p0 = 1 when |f| ≪ 1 (curve_fit
+   tolerances; K/L² ~ 1e-3). Now normalized internally; regression test added. This affected only the **`p_fit`
+   diagnostic column of `results/task3_convergence_summary.csv`** (Task 3 references used fixed p = 1 and are
+   unchanged); that column was recomputed from `results/task3_convergence.csv` (other columns identical).
+   Corrected Task 3 free orders scatter 0.25–2.0, median 1.16 → noise-limited, consistent with Task 3's "first order".
+7. Citations to verify: Zick & Homsy 1982, J. Fluid Mech. 115:13–26 (Table 2, SC: c = 0.027…0.5236 →
+   K* = 2.008…42.1; drag F = |∇P|·V_cell, superficial U — convention confirmed against Basilisk's `spheres.c`
+   test and the LBM drag-correlation paper arXiv:1401.2025, Sec. 2); Sangani & Acrivos 1982, Int. J. Multiphase Flow
+   8:343 (SC series coefficients 1.7601, 1.5593, 3.9799, 3.0734); Hasimoto 1959, J. Fluid Mech. 5:317;
+   Manwart et al. 2002, Phys. Rev. E 66:016702 (MAC on voxel images, mirror ghost); Silvester & Wathen 1994,
+   SIAM J. Numer. Anal. 31:1352 (block preconditioner); Duda, Koza & Matyka 2011, Phys. Rev. E 84:036319
+   (hydraulic tortuosity); Carman 1937, Trans. Inst. Chem. Eng. 15:150 (c_K = 5); duct series: Shah & London 1978
+   / White, *Viscous Fluid Flow*.
+8. Workspace: PyPI blocked (no pyamg); numpy 2.5.3, scipy 1.18.1, Python 3.13; pytest from a uv tool env.
+
+**Figures** (`results/figures/`): `task4_verification.png` ((a) Poiseuille profile + 2/H² error, (b) ducts and
+inclined slits vs h/D with slope-1/2 guides, (c) sphere arrays vs Zick & Homsy and the SA series, (d) sphere error
+vs n), `task4_convergence.png` (K(n)/K_ref vs 1/n with n = 96 anchors; estimator errors; tortuosity),
+`task4_permeability_vs_porosity.png` (K/L² vs φ with blend principal-value band; Kozeny constant; tortuosity).
+Data: `results/task4_*.csv`, `results/task4_pytest_log.txt`.
+
+**Tests**: 268 passed + 3 skipped (pyamg) in 7.9 min (Tasks 0–4, incl. slow; `results/task4_pytest_log.txt`).
+Task 4 alone: 49 passed + 1 skipped; `pytest -m "not slow" tests/test_stokes.py` runs 44 tests in ~30 s.
 
 ## Task 5 — Closure dataset
 _not started_

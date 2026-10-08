@@ -349,3 +349,12 @@ def test_convergence_helpers_recover_synthetic():
     assert abs(richardson(32, 2 - 3 / 32, 64, 2 - 3 / 64) - 2.0) < 1e-12
     assert abs(observed_order((16, 32, 64), [2 - 3 / 16**2, 2 - 3 / 32**2, 2 - 3 / 64**2]) - 2.0) < 1e-12
     assert abs(fit.rel_error(48) - (-3 / 48) / 2) < 1e-12
+
+
+@pytest.mark.parametrize("scale", [1e-3, 1.0, 1e9])
+def test_free_order_fit_is_scale_invariant(scale):
+    """Regression (found in Task 4): the free-order fit stalled at p0 = 1 for |f| ~ 1e-3."""
+    n = np.array([16, 24, 32, 48, 64.0])
+    free = fit_convergence(n, scale * (2.0 - 3.0 * n**-1.6), p=None)
+    assert abs(free.p - 1.6) < 1e-4
+    assert abs(free.f_inf / scale - 2.0) < 1e-6 and abs(free.C / scale + 3.0) < 1e-3
