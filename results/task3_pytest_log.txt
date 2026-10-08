@@ -1,0 +1,40 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.16, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/claude/zain4366/voxlat
+configfile: pyproject.toml
+plugins: anyio-4.15.1
+collected 218 items
+
+tests/test_conduction.py ........................................................
+n=48 blend: 1.39 s total, iterations [266, 266, 266], pc=jacobi
+.s....
+tests/test_config.py ....................
+tests/test_elasticity.py ........................s.................n=40 gyroid rho=0.35: 7.8 s total, 1.3 s per load case, 78480 dofs, iterations [254, 254, 254, 325, 325, 325]
+...w=0.0: E*/E_s = 0.954 rho^2.192
+.w=1.0: E*/E_s = 0.702 rho^1.984
+.
+tests/test_tpms.py ..........................................................
+tests/test_utils.py ..............
+tests/test_voxel_tools.py .................
+
+=============================== warnings summary ===============================
+tests/test_tpms.py: 48 warnings
+  /usr/local/lib/python3.13/dist-packages/skimage/measure/_marching_cubes_lewiner.py:237: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.
+  As an alternative, you can create a new view using np.reshape (with copy=False if needed).
+    ar.shape = shape
+
+tests/test_tpms.py: 46 warnings
+tests/test_voxel_tools.py: 20 warnings
+  /usr/local/lib/python3.13/dist-packages/skimage/measure/_marching_cubes_lewiner.py:213: DeprecationWarning: Setting the shape on a NumPy array has been deprecated in NumPy 2.5.
+  As an alternative, you can create a new view using np.reshape (with copy=False if needed).
+    faces.shape = -1, 3
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+SKIPPED [1] tests/test_conduction.py:294: pyamg not installed
+SKIPPED [1] tests/test_elasticity.py:289: pyamg not installed
+=========== 216 passed, 2 skipped, 114 warnings in 267.67s (0:04:27) ===========
+
+real	4m28.232s
+user	5m10.111s
+sys	0m2.666s

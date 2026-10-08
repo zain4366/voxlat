@@ -111,6 +111,23 @@ Background and design decisions: [docs/task1_explained.md](docs/task1_explained.
 The precomputed tables in `src/voxlat/geometry/data/` are rebuilt with
 `python scripts/task1_build_tables.py` (only needed if the geometry definitions change).
 
+## Homogenization (Tasks 2-3)
+
+```python
+from voxlat.geometry import TPMSParams
+from voxlat.homogenization import extrapolated_conductivity_tpms, extrapolated_elasticity_tpms
+
+p = TPMSParams(w=0.0, rho=0.35)
+k = extrapolated_conductivity_tpms(p)        # k_eff 3x3 [W/(m K)], Richardson R(32, 64)
+c = extrapolated_elasticity_tpms(p)          # C_eff 6x6 Voigt [Pa], Richardson R(32, 64), ~1 min
+c.C_eff, c.youngs_moduli, c.zener_ratio
+c.fine.localization["uniaxial_z"].p99        # von Mises stress concentration (n = 64 grid)
+```
+
+Voigt order is xx, yy, zz, yz, xz, xy with engineering shear strains; see the
+`voxlat.homogenization.elasticity` docstring. Figures: `python scripts/task3_stiffness_vs_density.py`,
+convergence study: `python scripts/task3_convergence.py` (both take `--quick`).
+
 ## Conventions
 
 - SI units inside the code; unit cells on normalized coordinates [0,1)³ scaled by cell size L.

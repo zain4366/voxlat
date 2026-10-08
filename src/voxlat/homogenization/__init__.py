@@ -19,6 +19,17 @@ from voxlat.homogenization.conduction import (
     hashin_shtrikman_bounds,
     wiener_bounds,
 )
+from voxlat.homogenization.elasticity import (
+    ElasticityResult,
+    ExtrapolatedElasticity,
+    StressLocalization,
+    effective_elasticity,
+    effective_elasticity_tpms,
+    extrapolated_elasticity_tpms,
+    hashin_shtrikman_porous,
+    isotropic_stiffness,
+    laminate_stiffness,
+)
 from voxlat.homogenization.convergence import (
     ConvergenceFit,
     fit_convergence,
@@ -34,6 +45,15 @@ __all__ = [
     "extrapolated_conductivity_tpms",
     "hashin_shtrikman_bounds",
     "wiener_bounds",
+    "ElasticityResult",
+    "ExtrapolatedElasticity",
+    "StressLocalization",
+    "effective_elasticity",
+    "effective_elasticity_tpms",
+    "extrapolated_elasticity_tpms",
+    "hashin_shtrikman_porous",
+    "isotropic_stiffness",
+    "laminate_stiffness",
     "ConvergenceFit",
     "fit_convergence",
     "observed_order",

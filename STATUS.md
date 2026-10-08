@@ -9,7 +9,7 @@ Plan: project doc `claude/voxlat_task_plan.md`. Reference numbers: `configs/refe
 | 0 | Repo scaffold + config | **done** (2026-10-07) |
 | 1 | TPMS unit-cell geometry | **done** (2026-10-08) |
 | 2 | Conduction homogenization k_eff | **done** (2026-10-08) |
-| 3 | Elasticity homogenization C_eff | not started |
+| 3 | Elasticity homogenization C_eff | **done** (2026-10-08) |
 | 4 | Stokes permeability K | not started |
 | 5 | Closure dataset | not started |
 | 6 | Closure surrogates | not started |
@@ -342,8 +342,174 @@ Data: `results/task2_keff_vs_density.csv`, `results/task2_convergence.csv`,
 
 **Tests**: 170 passed + 1 skipped (pyamg) in ~2.5 min (Tasks 0–2, incl. slow); `pytest -m "not slow"` ~1.5 min.
 
-## Task 3 — Elasticity homogenization
-_not started_
+## Task 3 — Elasticity homogenization (voxel FEA)  ✅
+
+**Built**
+- `src/voxlat/homogenization/elasticity.py` — periodic Q1 voxel FEA: 8-node trilinear hexahedra
+  (2×2×2 Gauss, exact for a cube), periodic fluctuation u~, six unit macroscopic strains → C_eff
+  (6×6). Vectorized chunked COO→CSR assembly (no Python loop over elements) or matrix-free
+  element-by-element product; PCG with pyamg smoothed aggregation (3×3 blocks, translation
+  near-null space) if installed, else Jacobi; the six load cases run in **lock-step**
+  (one CSR × 6-column product per iteration, identical iterates, ~1.3–1.8× faster).
+  C_eff by **average stress (flux) and by energy**; raises if they differ > 1e-5 (observed 1e-9…2e-8).
+  Element-centroid (= element-average) stresses → von Mises **stress localization**.
+- `scripts/task3_convergence.py` (~14 min, 2 cores), `scripts/task3_n96_anchor.py` (~16 min, 1 core,
+  ~1.4 GB), `scripts/task3_stiffness_vs_density.py` (~16 min, 2 cores). All but the anchor take `--quick`.
+- README: "Homogenization (Tasks 2-3)" section.
+- Tests: `tests/test_elasticity.py` (47 incl. 4 `slow`; AMG test skips without pyamg).
+
+**Conventions (stated in the module docstring)**
+- **Voigt** (reported `C_eff`): order xx, yy, zz, yz, xz, xy; strain vector uses **engineering shear**
+  γ = 2ε, so σ = C ε and C44 = μ for an isotropic solid; load case 4 = γ_yz = 1. S = C⁻¹ gives
+  E_i = 1/S_ii, G = 1/S_44….
+- **Mandel** (`C_mandel` = W C W, W = diag(1,1,1,√2,√2,√2)): orthonormal basis; eigenvalues
+  (Kelvin moduli) used for the SPD check and all rotations (`rotate_stiffness`).
+- Localization factor K = σ_vm(voxel)/Σ_vm(macro); uniaxial Σ_zz (Σ_vm = 1) and shear Σ_xz
+  (Σ_vm = √3). Use σ_vm,local ≈ K_p99 · Σ_vm,macro in Task 9.
+
+**Void: removed, not soft E_min (justification, measured)**
+Coolant has no shear stiffness, so E_void = 0 is the exact limit. Removing void elements/nodes gives
+2.5× fewer DOFs and ~2.6× less time (G, ρ* = 0.3, n = 24: 16 443 vs 41 472 DOFs) and **no bias**; a soft
+void biases C_eff by ≈ 22·E_min/E_s (2.2 % at 1e-3, 0.2 % at 1e-4; test-verified linear). The price is a
+singular-but-consistent K (periodic translations, floating islands = rigid modes, corner/edge-hinged
+voxels = mechanisms); all null vectors have B w = 0, so loads are orthogonal to them and they carry no
+stress. Translations are projected per connected component. Edge-hinged voxels *do* carry the stretch
+of the shared edge (Q1 physics) — tested.
+
+**Public API (`voxlat.homogenization`, all in `.elasticity`)**
+```python
+effective_elasticity(cell, E=None, nu=None, *, void_modulus=0.0, tol=1e-8,
+                     preconditioner="auto"|"amg"|"jacobi"|"block_jacobi"|"none",
+                     operator="auto"|"assembled"|"matrix_free", block_solve=True,
+                     localization=("uniaxial_z","shear_xz"), keep_localization_fields=False,
+                     return_fields=False, check=True) -> ElasticityResult
+    # cell: bool (True = solid; needs E, nu) or float field of voxel moduli (common nu)
+ElasticityResult: .C_eff (Voigt, energy form) .C_eff_flux .agreement .C_mandel .S .eigenvalues .is_spd
+    .youngs_moduli (Ex,Ey,Ez) .shear_moduli .E_axial .youngs_modulus(d) .youngs_extremes()
+    .cubic_constants (C11,C12,C44) .cubic_deviation .zener_ratio .universal_anisotropy .bulk_modulus
+    .localization[name] -> StressLocalization(max, p99, p999, mean, argmax_voxel, factor?)
+    .localize(Sigma_voigt)  (needs return_fields)   .as_row()  .iterations .residuals .solve_time
+    .n_dofs .n_elements .n_components .unit_stresses (6, Ne, 6) float32 if return_fields
+effective_elasticity_tpms(params, n=40, E=None, nu=None, *, cfg=None, offset=None, **kw)   # E, nu from config
+extrapolated_elasticity_tpms(params, n=(32, 64), ..., p=1.0) -> ExtrapolatedElasticity   <- PRODUCTION
+    # .C_eff = (n2 C(n2) - n1 C(n1))/(n2 - n1) .coarse .fine (localization from fine) .correction
+averaged_elasticity_tpms(params, n=40, n_offsets=3, ...) -> AveragedElasticity; grid_offsets(k, seed=2026)
+isotropic_stiffness(E, nu), lame_parameters, voigt_to_mandel, mandel_to_voigt, rotate_stiffness(C, R),
+von_mises(s), hex8_element(nu) -> (K1, F1, B_centre, D1), voigt_reuss_hill(C) -> {K_V..., E_H, A_U},
+youngs_extremes(C), cubic_deviation(C), laminate_stiffness(fractions, E, nu, axis) (exact Backus),
+hashin_shtrikman_porous(phi, E, nu) -> {K, G, E} upper bounds; MACRO_STRESS_CASES
+```
+
+**Verification (all pass)**
+| Test | Result |
+|---|---|
+| Element: 6 rigid modes, constant-strain patch test, self-equilibrated F1 | exact (1e-14) |
+| Homogeneous cells (6³, 5×7×9, 1×4×3; bool and float) | C = C_s to 1e-13, 0 iterations, K_loc ≡ 1 |
+| Two-phase laminates along x, y, z (contrast 0.1, 1e-3), 13-layer 3-phase laminate | = exact Backus tensor to 1e-9; Reuss (normal/transverse shear) and Voigt (in-plane shear) components named and checked |
+| Void laminates (disconnected plates, 2 components) | plane-stress in-plane terms exact (1e-12), K_loc = 1/φ exactly |
+| Floating island / corner-hinged voxel | add exactly nothing (1e-9), hinged voxel stress-free; edge hinge converges |
+| Random two-phase cell | Hill bounds C_Reuss ≤ C_eff ≤ C_Voigt (Loewner order), SPD |
+| Flux vs energy; symmetric; SPD; Hill average ⟨σ⟩ = Σ | agree 1e-9; yes; yes; 1e-5 (float32 store) |
+| Cubic symmetry G, D at ρ* = 0.2/0.35/0.5, n = 32 | C11=C22=C33 and C44s to < 5e-3, C12s < 1e-2, cubic deviation < 5e-3, 90° invariance |
+| Blend w = 0.5 | invariant under cyclic x→y→z ([111] 3-fold axis) but cubic deviation 0.65 → **trigonal** |
+| HS upper bounds (K, G, E) | respected |
+| Invariances | periodic roll, axis permutation ↔ tensor rotation, soft void → removed void linearly |
+| Lock-step PCG = scipy cg = matrix-free = block-Jacobi | to 1e-7 |
+| E*/E_s = Cρ^m, ρ = 0.2–0.5, n = 32 | G 0.95 ρ^2.19, D 0.70 ρ^1.98 → bending-dominated, m ≈ 2 ✔ |
+
+**Timings** (sandbox core, Jacobi, G ρ* = 0.35, all 6 cases incl. assembly + localization)
+| n | DOFs | iterations | total | per load case |
+|---|---|---|---|---|
+| 24 | 18.6 k | 200–230 | 1.6 s | 0.3 s |
+| 32 | 42 k | ~260 | 3.7 s | 0.6 s |
+| **40** | **78 k** | **254–325** | **6.6–7.8 s** | **1.1–1.3 s** (target ≤ 60 s ✅, ~50× margin) |
+| 48 | 133 k | ~370 | 15 s | 2.5 s |
+| 64 | 304 k | ~490 | 45–56 s | 8–9 s |
+| 96 | 1.0 M | 530–690 | 215–275 s (assembled, ~1.4 GB) | ~40 s |
+Iterations ∝ n (Jacobi). Blends ~2× more iterations. `operator="auto"` switches to matrix-free above
+~6e7 non-zeros (~0.7 GB); matrix-free is memory-light but ~3× slower — on a 16 GB laptop pass
+`operator="assembled"` for n ≤ 96. AMG not tested (pyamg not installable here).
+
+**Convergence (n = 16–64, 4 grid offsets each, G/D × ρ* = 0.2/0.35/0.5; `results/task3_convergence_summary.csv`)**
+Reference = fit f_inf + C/n to offset-averaged n = 32–64. **Independent check at n = 96** (2 offsets,
+ρ* = 0.35): the fit predicts the n = 96 values to ≤ 0.6 % for all six quantities → reference ±~0.5 %.
+- Unlike k_eff (Task 2, 3–17 % low), the stiffness staircase error is **small**: offset-averaged C11, C12,
+  C44, K converge **from below, first order**, −1.8…−4.3 % at n = 24, −1.4…−2.5 % (C12 −4 %) at n = 48.
+  Q1 bending stiffening and staircase softening partly cancel.
+- **Alignment noise is as large as the bias** for a single grid: std over offsets of E* ≈ 0.4–1.5 % (n = 32),
+  0.2–0.8 % (n = 48); worst at low ρ*.
+- Max |error| over the 6 cases, default grid (offset 0):
+
+| Estimator | cost (2 parallel) | E* | all of E*, C11, C12, C44, K, Zener |
+|---|---|---|---|
+| raw n = 40 | 6 s | 5.8 % (low) | 5.8 % |
+| raw n = 48 | 15 s | 2.1 % (low) | 6.4 % (C12, D ρ* = 0.2) |
+| raw n = 64 | 45 s | 2.8 % | 3.0 % |
+| 3 offsets n = 48 | 45 s | 3.0 % | 4.6 % |
+| **R(32, 64), p = 1** | **47 s** | **2.6 %** | **2.9 %** |
+| R(24, 48) on 3-offset averages | 47 s | 3.0 % | 3.0 % |
+
+**Recommended: `extrapolated_elasticity_tpms(params, (32, 64))` (same pair as Task 2)** — ≤ 3 % on every
+quantity incl. the Zener ratio, ~1 min/sample on a laptop core. Cheap alternative: raw n = 48 (E* ≤ 2 % low,
+off-diagonal C12 up to 6 % low). Localization: **use p99 at n ≥ 48** — p99 is converged to ±3 % from n = 24
+on (G ρ* = 0.35: 14.9 / 15.8 / 15.3 / 15.4 at n = 24/32/48/64); the **max is a voxel-corner singularity
+that keeps growing** (G ρ* = 0.2: 35 → 48 from n = 16 to 64) — never use the max for design.
+
+**Results (R(32, 64), AlSi10Mg; `results/task3_stiffness_vs_density.csv`, fits `results/task3_powerlaw_fits.csv`)**
+| ρ* | 0.20 | 0.30 | 0.35 | 0.40 | 0.50 |
+|---|---|---|---|---|---|
+| Gyroid E*/E_s | 0.0300 | 0.0666 | 0.0998 | 0.1265 | 0.2074 |
+| Diamond E*/E_s | 0.0307 | 0.0642 | 0.0864 | 0.1145 | 0.1789 |
+| Blend w = 0.5 E*/E_s (x,y,z) | 0.0068 | 0.0169 | 0.0240 | 0.0756 | 0.1777 |
+| Gyroid Zener A | 1.90 | 1.71 | 1.48 | 1.45 | 1.28 |
+| Diamond Zener A | 2.29 | 2.11 | 2.04 | 1.92 | 1.72 |
+| Gyroid K_p99 (uniaxial z / shear xz) | 36 / 17 | 19 / 9.1 | 15 / 7.0 | 12 / 5.8 | 8.3 / 4.1 |
+| Diamond K_p99 | 23 / 17 | 12 / 9.3 | 9.7 / 7.4 | 8.2 / 6.1 | 6.2 / 4.4 |
+| Blend K_p99 | 95 / 62 | 52 / 32 | 42 / 26 | 19 / 12 | 8.5 / 5.7 |
+
+- **Power laws, ρ* = 0.2–0.5**: gyroid E*/E_s = **0.90 ρ*^2.13**, diamond **0.67 ρ*^1.93** (Hill-average E:
+  0.86 ρ^1.87, 0.80 ρ^1.76). Exponent ≈ 2 = bending-dominated, matching Khaderi, Deshpande & Fleck 2014
+  (gyroid lattice: E, G ∝ ρ², bulk ∝ ρ) and the bending classification of skeletal TPMS in Al-Ketan et al.
+  2018. With m fixed at 2: C = 0.79 (G), 0.72 (D) vs **Maskery et al. 2018** experiments (PA2200, ρ* = 0.3,
+  m assumed 2): C = 0.69 (G), 0.68 (D) → our ideal-geometry FE is 11 % (G) / 9 % (D) stiffer at ρ* = 0.3,
+  plausible given SLS porosity/surface roughness. Bulk modulus scales more weakly (m ≈ 1.5–1.6, stretching
+  under hydrostatic load, as Khaderi et al. predict).
+- **G and D are not isotropic**: Zener 1.3–1.9 (G) and 1.7–2.3 (D) in the design range, decreasing with ρ*;
+  E_max/E_min = 1.2–1.8 (G), 1.6–2.0 (D), stiffest along ⟨111⟩. Task 9 must not treat C_eff as isotropic.
+- G is stiffer than D at ρ* ≥ 0.35 but has **~1.5× higher uniaxial stress concentration** (K_p99 15 vs 9.7 at
+  0.35); in shear they are equal. Diamond is the better structural choice per unit E.
+
+**Open issues / notes for later tasks**
+1. **Blends are structurally bad below ρ* ≈ 0.375 (RQ2-relevant).** w = 0.5 is 3.4–4.5× softer than G/D
+   (E ∝ ρ^3.7), strongly anisotropic (A^U ≈ 3.5 vs 0.2–0.9) and has 2.5–4× higher stress concentration
+   (K_p99 up to 95 at ρ* = 0.2); at ρ* = 0.35→0.40 E jumps 3× and A^U drops 7× — the same pinch-neck topology
+   change found in Tasks 1 and 2. Task 11 should either forbid mid-w at low ρ*, use the strict min-wall
+   constraint, or carry the structural margin with K_p99 from these closures (which will penalize it).
+2. Blend tensors are trigonal about [111] (cubic deviation 0.65): Task 6 must predict the full 6×6 (or
+   its trigonal invariants in the [111] frame), and Task 9 must rotate C_eff into (r, s, z).
+3. Localization factors are element-average (centroid) values on a staircase surface; p99 is
+   resolution-stable, but absolute peak stress at a smooth printed surface needs a fatigue-notch argument
+   in the paper (or a smoothed-boundary check in Task 12).
+4. Anisotropic cells work (n × n × round(n a_z)); at ρ* = 0.35, n = 16, a_z = 1.5 gives E_z/E_x = 1.65 (G) and
+   3.1 (D) — stretch changes stiffness far more than it changes k_eff (Task 2: 1.5–1.6).
+   The Richardson pair refers to the in-plane n.
+5. `extrapolated_elasticity_tpms` at (32, 64) ≈ 45–60 s per sample (G/D), ~100 s for blends → the Task 5
+   dataset (N ≈ 270) needs ~3–4 h for elasticity alone on 2 cores; AMG on the laptop should cut that.
+6. Citations to verify: Khaderi, Deshpande & Fleck 2014, Int. J. Solids Struct. 51(23–24):3866–3877;
+   Maskery et al. 2018, Polymer 152:62–71 (doi 10.1016/j.polymer.2017.11.049; values from Table 3);
+   Al-Ketan, Rowshan & Abu Al-Rub 2018, Addit. Manuf. 19:167–183; Lu et al. 2019, J. Mech. Behav. Biomed.
+   Mater. 99:56–65 (cubic symmetry of G/D; they report G as the most anisotropic — our D is more
+   anisotropic, check their geometry definition); Backus 1962, J. Geophys. Res. 67:4427 (laminates);
+   Hashin & Shtrikman 1963, J. Mech. Phys. Solids 11:127; Ranganathan & Ostoja-Starzewski 2008, Phys. Rev.
+   Lett. 101:055504 (A^U); Gibson & Ashby 1997, *Cellular Solids*, 2nd ed.
+7. Workspace: PyPI blocked (no pyamg); numpy 2.5.3, scipy 1.18.1, Python 3.13; pytest from a uv tool env.
+
+**Figures** (`results/figures/`): `task3_youngs_vs_density.png` (log-log E*/E_s, fits, HS bound, slope-2
+guide, Maskery points, blend directional range), `task3_anisotropy_vs_density.png` (Zener; universal
+anisotropy A^U incl. blend), `task3_localization_vs_density.png` (p99/max/mean, uniaxial z and shear xz),
+`task3_convergence.png`. Data: `results/task3_*.csv`, `results/task3_pytest_log.txt`.
+
+**Tests**: 216 passed + 2 skipped (pyamg) in 4.5 min (Tasks 0–3, incl. slow); Task 3 alone 46 + 1 skipped.
 
 ## Task 4 — Stokes permeability
 _not started_
