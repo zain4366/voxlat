@@ -26,6 +26,9 @@ tempCodeRunnerFile.py
 
 # Large / regenerable outputs (keep folders via .gitkeep)
 data/fields/
+# Task 5: per-sample resume cache + run logs (data/closures.parquet is the deliverable)
+data/*_parts/
+data/*_build.log
 *.stl
 *.vdb
 models/**/*.pt

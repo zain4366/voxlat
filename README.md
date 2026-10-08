@@ -140,6 +140,32 @@ docstring has the equations. Any periodic bool cell works too:
 `scripts/task4_verification.py` (Poiseuille, ducts, inclined slits, sphere arrays vs
 Zick & Homsy), `scripts/task4_convergence.py`, `scripts/task4_permeability_vs_porosity.py`.
 
+## Closure dataset (Task 5)
+
+Every homogenized property over the morphology box w ∈ [0, 1], ρ* ∈ [0.20, 0.50],
+a_z ∈ [0.7, 1.5]: 256 scrambled-Sobol points + 8 corners + 12 edge midpoints + 14
+pure-gyroid/diamond points (a_z = 1), each with geometry metrics, k_eff/k_s, C_eff/E_s
++ stress localization (6 unit stresses) and K/L², all at Richardson R(32, 64).
+
+```powershell
+python scripts/build_dataset.py --estimate-only     # times 3 samples, prints the runtime estimate
+python scripts/build_dataset.py --n-jobs 4          # overnight; Ctrl+C-safe, rerun the same command to resume
+python scripts/build_dataset.py --plot-only         # redraw results/figures/task5_closures_quicklook.png
+python scripts/build_dataset.py --quick             # 10-second plumbing test at R(8, 16)
+```
+
+Each finished sample is saved immediately to `data/closures_parts/<id>.json`; the run
+ends by consolidating everything into `data/closures.parquet` (one row per sample,
+~170 columns, dimensionless: k/k_s, C/E_s, K/L², lengths/L). Progress and ETA go to the
+console and `data/closures_build.log`. Choose `--n-jobs` ≤ physical cores and keep
+n_jobs × ~1.5 GB below ~70 % of your RAM.
+
+```python
+from voxlat.closures import read_table
+df = read_table("data/closures.parquet")
+ok = df[df.status == "ok"]                   # columns: w, rho_target, a_z, keff_*, C11..C66, K_*, loc_*, ...
+```
+
 ## Conventions
 
 - SI units inside the code; unit cells on normalized coordinates [0,1)³ scaled by cell size L.

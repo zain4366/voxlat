@@ -1,0 +1,30 @@
+20:21:13 | INFO    | voxlat.task5.dataset | ==============================================================================
+20:21:13 | INFO    | voxlat.task5.dataset | VoxLat Task 5 closure dataset   2026-10-08 20:21
+20:21:13 | INFO    | voxlat.task5.dataset | design: 8 samples {'sobol': 8}; w (0.0, 1.0), rho* (0.2, 0.5), a_z levels 0.6875 ... 1.4688 (step 0.03125)
+20:21:13 | INFO    | voxlat.task5.dataset | grids R(32, 64), metrics n = 64, k_f/k_s = 1/325, E_s = 70 GPa, nu = 0.33, settings 64f53a501dd4
+20:21:13 | INFO    | voxlat.task5.dataset | output data/closures_demo.parquet (parts in data/closures_demo_parts)  [pyarrow missing -> CSV fallback]
+20:21:13 | INFO    | voxlat.task5.dataset | 0 already done, 8 pending
+20:21:13 | INFO    | voxlat.task5.dataset | timing 3 sample(s) on one core: sobol-0000 (w=0.13, rho*=0.24, a_z=0.688), sobol-0001 (w=0.59, rho*=0.49, a_z=1.156), sobol-0003 (w=0.34, rho*=0.38, a_z=1.469)
+20:28:15 | INFO    | voxlat.closures.dataset | [   1/3] sobol-0003    421.9 s   elapsed 7m02s   ETA 7m46s
+20:33:07 | INFO    | voxlat.closures.dataset | [   2/3] sobol-0001    292.5 s   elapsed 11m54s   ETA 2m34s
+20:35:18 | INFO    | voxlat.closures.dataset | [   3/3] sobol-0000    130.7 s   elapsed 14m05s   ETA 0s
+20:35:18 | INFO    | voxlat.task5.dataset | runtime estimate for this machine:
+Timed samples (one core, serial): sobol-0003 422 s (cost 3.96), sobol-0001 293 s (cost 2.90), sobol-0000 131 s (cost 1.47)
+-> 101 s per cost unit (pure G/D, a_z = 1 ~ 1 unit; blends ~2.4)
+Pending: 5 samples = 0.4 CPU-hours
+Estimated wall time (parallel workers slow each other ~1.2-1.6x via memory bandwidth):
+    1 worker(s):  22.7 min ...  22.7 min
+    2 worker(s):  17.2 min ...  23.0 min  <- --n-jobs
+    4 worker(s):  10.4 min ...  13.9 min
+    6 worker(s):   8.1 min ...  10.8 min
+    8 worker(s):   7.2 min ...   9.5 min
+Peak memory per worker so far: 1.1 GB (stretched blends a_z = 1.5 need ~1.5x the a_z = 1 value); keep n_jobs x peak below ~70 % of RAM.
+20:35:18 | INFO    | voxlat.task5.dataset | running 5 samples on 2 worker(s), longest first ...
+20:41:29 | INFO    | voxlat.closures.dataset | [   1/5] sobol-0004    370.9 s   elapsed 6m11s   ETA 20m37s
+20:43:28 | INFO    | voxlat.closures.dataset | [   2/5] sobol-0006    489.5 s   elapsed 8m10s   ETA 8m24s
+20:44:49 | INFO    | voxlat.closures.dataset | [   3/5] sobol-0002    199.9 s   elapsed 9m31s   ETA 4m40s
+20:46:19 | INFO    | voxlat.closures.dataset | [   4/5] sobol-0007    170.8 s   elapsed 11m01s   ETA 1m57s
+20:47:47 | INFO    | voxlat.closures.dataset | [   5/5] sobol-0005    177.9 s   elapsed 12m29s   ETA 0s
+20:47:47 | WARNING | voxlat.closures.dataset | pyarrow not installed: writing closures_demo.csv instead of parquet
+20:47:47 | INFO    | voxlat.task5.dataset | table: 8/8 samples {'ok': 8} -> data/closures_demo.csv
+20:47:50 | INFO    | voxlat.task5.dataset | figure -> /home/claude/zain4366/voxlat/results/figures/task5_closures_quicklook.png

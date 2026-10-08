@@ -156,6 +156,7 @@ __all__ = [
     "AveragedElasticity",
     "grid_offsets",
     "MACRO_STRESS_CASES",
+    "ALL_STRESS_CASES",
 ]
 
 LOG = get_logger("homogenization.elasticity")
@@ -168,11 +169,21 @@ VOIGT_ORDER: tuple[str, ...] = ("xx", "yy", "zz", "yz", "xz", "xy")
 #: Mandel weights: C_mandel = diag(W) C_voigt diag(W)
 MANDEL_W = np.array([1.0, 1.0, 1.0, np.sqrt(2.0), np.sqrt(2.0), np.sqrt(2.0)])
 
-#: Macroscopic stress cases for the localization factors (Voigt stress vectors, unit magnitude)
+#: Macroscopic stress cases for the localization factors (Voigt stress vectors, unit magnitude).
+#: The default ``localization`` of ``effective_elasticity`` is ("uniaxial_z", "shear_xz");
+#: the other four complete the six unit stresses (Task 5 dataset: stretched cells and blends
+#: are not cubic, so e.g. uniaxial_x != uniaxial_z and shear_xy != shear_xz there).
 MACRO_STRESS_CASES: dict[str, np.ndarray] = {
     "uniaxial_z": np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
     "shear_xz": np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
+    "uniaxial_x": np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+    "uniaxial_y": np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0]),
+    "shear_yz": np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+    "shear_xy": np.array([0.0, 0.0, 0.0, 0.0, 0.0, 1.0]),
 }
+ALL_STRESS_CASES: tuple[str, ...] = (
+    "uniaxial_x", "uniaxial_y", "uniaxial_z", "shear_yz", "shear_xz", "shear_xy",
+)
 
 # element corner a = cx + 2 cy + 4 cz  (x fastest)
 _CORNERS = np.array([[a & 1, (a >> 1) & 1, (a >> 2) & 1] for a in range(8)])
