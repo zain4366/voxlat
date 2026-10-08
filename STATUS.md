@@ -524,7 +524,8 @@ anisotropy A^U incl. blend), `task3_localization_vs_density.png` (p99/max/mean, 
 - `src/voxlat/homogenization/convergence.py`: the free-order fit (`fit_convergence(..., p=None)`) now fits
   in normalized units (bug fix, see open issue 6).
 - Scripts: `scripts/task4_verification.py` (~2 min, 2 cores), `scripts/task4_convergence.py` (~11 min, 2 cores,
-  incl. four n = 96 anchors, ~1.5 GB each), `scripts/task4_permeability_vs_porosity.py` (~9 min, 2 cores). All take `--quick`; the first two also `--replot`.
+  incl. four n = 96 anchors, ~1.5 GB each), `scripts/task4_permeability_vs_porosity.py` (~9 min, 2 cores).
+  `scripts/task4_benchmark_preconditioner.py` (Jacobi vs AMG timing and K agreement, ~3-5 min). All take `--quick`; the first two also `--replot`.
 - `voxlat.homogenization` exports the Stokes API; README "Homogenization (Tasks 2-4)" updated.
 - Tests: `tests/test_stokes.py` (50 incl. 6 `slow`; the AMG test skips without pyamg),
   + 3 scale-invariance regression tests in `tests/test_conduction.py`.
@@ -655,8 +656,15 @@ pyamg should cut the iteration count (untested here).
    literature in Task 8; state this in the paper's limitations.
 4. For Task 7: strip walls aligned with the grid are 2nd-order exact (Poiseuille / duct tests), so finite-gap
    errors measured there will be lattice physics, not discretization; keep the lattice at n ≥ 32 per cell.
-5. AMG path untested (pyamg not installable here): `preconditioner="amg"` uses a symmetric-Gauss-Seidel SA V-cycle
-   on the velocity block (SPD, as MINRES requires); `test_amg_matches_jacobi` checks it on the laptop.
+5. AMG path (`preconditioner="amg"`, a symmetric-Gauss-Seidel SA V-cycle on the velocity block, SPD as MINRES
+   requires; `"auto"` picks it whenever pyamg is installed) — **checked on the Windows laptop** (Python 3.13.7,
+   pyamg installed): K matches Jacobi to 2e-6 of mean K. AMG aggregation is not symmetric under the cube's
+   rotations and MINRES stops at a looser true residual for the same tol, so symmetric cells show off-diagonals
+   ~1e-5 of K instead of round-off (Jacobi keeps them at 1e-8). Both are ~1000x below the discretization error.
+   First laptop run failed 5 slow tests on tolerances tuned to Jacobi; fixed in the Task 4 follow-up commit
+   (solver unchanged; the exact-symmetry check now runs with Jacobi explicitly). Speed on the laptop:
+   run `python scripts/task4_benchmark_preconditioner.py` and record AMG vs Jacobi here before Task 5;
+   if AMG is not faster, Task 5 should pass `preconditioner="jacobi"`.
 6. **Bug fix in a shared helper:** `fit_convergence(..., p=None)` stalled at p0 = 1 when |f| ≪ 1 (curve_fit
    tolerances; K/L² ~ 1e-3). Now normalized internally; regression test added. This affected only the **`p_fit`
    diagnostic column of `results/task3_convergence_summary.csv`** (Task 3 references used fixed p = 1 and are
