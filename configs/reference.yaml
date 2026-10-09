@@ -75,6 +75,8 @@ manufacturing:
   min_pore_size: 0.0008            # m   0.8 mm
   # Grading-gradient limit, expressed as the maximum change in relative density
   # over one cell length:  |grad rho*| * L  <= this value.
-  # PLACEHOLDER — the plan only says "limit on grading gradient". Revisit in Task 7
-  # (graded-strip study) and fix before Task 11.
+  # Set by the Task 7 graded-strip study (STATUS.md, Task 7): at 0.05 the local-closure
+  # error of gyroid/diamond strips is <= 1.0 % in every property (2.0 % at 0.075,
+  # 3.5 % at 0.15). Blends crossing the pinch-neck transition are not covered by
+  # any gradient limit (their wall effect depends on the local density).
   max_density_change_per_cell: 0.05
