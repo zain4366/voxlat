@@ -166,6 +166,31 @@ df = read_table("data/closures.parquet")
 ok = df[df.status == "ok"]                   # columns: w, rho_target, a_z, keff_*, C11..C66, K_*, loc_*, ...
 ```
 
+## Closure surrogates (Task 6)
+
+GP (ARD Matérn-5/2, one per target), 5-member MLP deep ensemble and a small 3D CNN,
+trained on the Task 5 table. Pure numpy + scikit-learn: no torch needed, models are
+plain `.npz` files in `models/`.
+
+```powershell
+python scripts/task6_train_surrogates.py            # models/closure_gp.npz + closure_ensemble.npz, CV-recalibrated (~7 min)
+python scripts/task6_train_surrogates.py --cnn      # + models/closure_cnn.npz (3D CNN for K*, E*, +15 min)
+python scripts/task6_evaluate.py                    # 5-fold CV + extrapolation splits, tables + figures (~10 min)
+python scripts/task6_cnn_experiment.py              # CNN vs GP vs ensemble (~80 min; --splits band sparse ~20 min)
+```
+
+```python
+from voxlat.surrogates import ClosureModel
+cm = ClosureModel.load("gp")                        # or "ensemble"
+out = cm.predict((0.0, 0.35, 1.0), L=4e-3)          # theta = (w, rho*, a_z); L in m
+K, K_std = out["K"]                                  # (3, 3) m^2; also K_principal, K_star, k_eff [W/mK],
+                                                     # C_eff [Pa, Voigt], E, E_star, a_sf [1/m], loc_<case>_p99
+```
+
+Every tensor is symmetric positive definite and has the exact symmetry class of theta
+(cubic / tetragonal / trigonal / triclinic); std's are first-order predictive standard
+deviations. Accuracy table: STATUS.md, Task 6.
+
 ## Conventions
 
 - SI units inside the code; unit cells on normalized coordinates [0,1)³ scaled by cell size L.
