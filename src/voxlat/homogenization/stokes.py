@@ -67,6 +67,10 @@ matrix (the identity in voxel units, mu = 1) for the Schur block -- the
 classic optimal block preconditioner for Stokes (Silvester & Wathen 1994,
 SIAM J. Numer. Anal. 31:1352; Elman, Silvester & Wathen 2014, ch. 4).
 Iterations grow ~ n with Jacobi (n = 48: 350-900, n = 64: 500-1200).
+``preconditioner="two_level"`` (Task 7) replaces Jacobi in the velocity block by
+Jacobi + a piecewise-constant aggregation coarse space per velocity component
+(``voxlat.homogenization.coarse``): ~5x fewer iterations on long finite-gap
+strips, no pyamg needed.
 
 K is computed from the same solves in two ways:
 
@@ -147,7 +151,10 @@ __all__ = [
 
 LOG = get_logger("homogenization.stokes")
 
-Preconditioner = Literal["auto", "amg", "jacobi"]
+Preconditioner = Literal["auto", "amg", "jacobi", "two_level"]
+
+#: default aggregate edge (voxels) of the two-level velocity preconditioner
+STOKES_COARSE_BLOCK = 4
 Symmetry = Literal["none", "cubic", "tetragonal_z"]
 
 #: Zick & Homsy (1982), J. Fluid Mech. 115:13-26, Table 2, simple-cubic array:
@@ -353,7 +360,9 @@ def assemble_stokes_system(solid: np.ndarray) -> StokesSystem:
     )
 
 
-def _make_preconditioner(system: StokesSystem, kind: Preconditioner) -> tuple[LinearOperator, str]:
+def _make_preconditioner(
+    system: StokesSystem, kind: Preconditioner, coarse_block: int | None = None
+) -> tuple[LinearOperator, str]:
     """Block-diagonal SPD preconditioner diag(A_hat^-1, I) for MINRES."""
     if kind == "auto":
         kind = "amg" if pyamg_available() else "jacobi"
@@ -361,6 +370,29 @@ def _make_preconditioner(system: StokesSystem, kind: Preconditioner) -> tuple[Li
     if kind == "jacobi":
         dinv = np.concatenate([1.0 / system.A.diagonal(), np.ones(n_p)])
         return LinearOperator(system.saddle.shape, matvec=lambda x: dinv * x, dtype=np.float64), "jacobi"
+    if kind == "two_level":
+        from voxlat.homogenization.coarse import TwoLevelPreconditioner, box_aggregates, scalar_coarse_basis
+
+        block = int(coarse_block or STOKES_COARSE_BLOCK)
+        shape = system.shape
+        nb = int(np.prod([(s + block - 1) // block for s in shape]))
+        labels = np.empty(n_u, dtype=np.int64)
+        for d in range(3):
+            gi = np.stack(np.nonzero(system.active[d]), axis=1)  # C order = face_id order
+            if gi.size:
+                labels[system.offsets[d]:system.offsets[d + 1]] = (
+                    box_aggregates(gi, shape, block) + d * nb  # components never share an aggregate
+                )
+        _, labels = np.unique(labels, return_inverse=True)
+        Pu = TwoLevelPreconditioner(system.A, scalar_coarse_basis(labels.ravel()))
+
+        def mv2(x: np.ndarray) -> np.ndarray:
+            y = np.empty_like(x)
+            y[:n_u] = Pu @ x[:n_u]
+            y[n_u:] = x[n_u:]
+            return y
+
+        return LinearOperator(system.saddle.shape, matvec=mv2, dtype=np.float64), "two_level"
     if kind == "amg":
         try:
             import pyamg
@@ -582,6 +614,7 @@ def permeability(
     return_fields: bool = False,
     check: bool = True,
     agreement_tol: float = 1e-3,
+    coarse_block: int | None = None,
 ) -> PermeabilityResult:
     """Periodic permeability tensor of a voxel cell (MAC Stokes, see module docstring).
 
@@ -603,7 +636,9 @@ def permeability(
         unsolved entries of K are NaN).
     tol, preconditioner, maxiter:
         MINRES settings (see ``solve_stokes``); preconditioner "auto" = AMG
-        velocity block if pyamg is installed, else Jacobi.
+        velocity block if pyamg is installed, else Jacobi; "two_level" = Jacobi +
+        aggregation coarse space (aggregate edge ``coarse_block`` voxels, default 4),
+        recommended for long grids without pyamg.
     return_fields:
         Keep velocity (float32, staggered) and pressure fields.
     check:
@@ -649,7 +684,7 @@ def permeability(
         )
 
     system = assemble_stokes_system(solid)
-    M, pc_name = _make_preconditioner(system, preconditioner)
+    M, pc_name = _make_preconditioner(system, preconditioner, coarse_block)
 
     U = np.zeros((system.n_u, len(dirs)))
     iters, resid, divs = [], [], []

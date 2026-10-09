@@ -13,7 +13,7 @@ Plan: project doc `claude/voxlat_task_plan.md`. Reference numbers: `configs/refe
 | 4 | Stokes permeability K | **done** (2026-10-08) |
 | 5 | Closure dataset | **done** (2026-10-08, run on the laptop; record reconstructed in Task 6) |
 | 6 | Closure surrogates | **done** (2026-10-09) |
-| 7 | Finite-gap study (RQ1) | not started |
+| 7 | Finite-gap study (RQ1) | **done** (2026-10-09, n = 32 in the sandbox; n = 48 overnight run optional) |
 | 8 | Literature closures (Nu, Forchheimer) | not started |
 | 9 | Homogenized jacket device model | not started |
 | 10 | Baselines B1–B3 | not started |
@@ -85,9 +85,7 @@ Also checks frozen/typed config, unknown/missing keys rejected, overrides, env-v
 seeding reproducibility, run_record JSON-serializability, 300-dpi PNG output size.
 
 **Open issues / decisions for later tasks**
-1. **Grading-gradient limit is a placeholder**: `manufacturing.max_density_change_per_cell = 0.05`
-   (|∇ρ*|·L ≤ 0.05). The plan gives no number. Set it from the Task 7 graded-strip study
-   before Task 11.
+1. ~~Grading-gradient limit is a placeholder~~ → confirmed at 0.05 by the Task 7 graded strips (see Task 7).
 2. Q = 770 W vs total loss 957 W: the jacket is assumed to take ~80 % of the losses
    (rest via end windings / rotor / shaft). State this in the manuscript.
 3. Manifold "width" is an arc length at the lattice (15 mm); Task 9 must decide whether it is
@@ -971,8 +969,202 @@ trained models reproduce the Task 2-4 tables (rho* = 0.35: K*, k*, E* within 3 /
 Tests needing the Task 5 table read `data/closures.parquet` (pyarrow) or `$VOXLAT_CLOSURE_TABLE`; tests of
 the trained models skip if `models/` is empty.
 
-## Task 7 — Finite-gap study (RQ1)
-_not started_
+## Task 7 — Finite-gap study (RQ1)  ✅
+
+**Built**
+- `src/voxlat/homogenization/finite_gap.py` — strips (`GapSpec`, `build_strip`, `bulk_cell`), wall removal
+  (`compute_properties`, laminate mixed form), homogenized prediction (`BulkInterpolator`,
+  `homogenized_properties`), discrepancies, discrepancy models (`PhysicalDiscrepancyModel`,
+  `GPDiscrepancyModel`, `grouped_cv`) and the Task 9 API `FiniteGapCorrection`.
+- `src/voxlat/homogenization/finite_gap_study.py` — suite design, resumable workers (one JSON part per bulk
+  cell / strip in `data/finite_gap/`, git-ignored), consolidation to **`data/finite_gap.csv`** (340 rows; +parquet
+  when pyarrow exists).
+- `src/voxlat/homogenization/coarse.py` — **two-level preconditioner** (Jacobi + unsmoothed aggregation coarse
+  space on 8³ boxes: constants for conduction / each Stokes velocity component (4³ boxes), the 6 rigid-body modes
+  for elasticity). Needed because Jacobi iterations grow with the long strip axis and pyamg is not installable here.
+- Solver extensions (backward compatible; defaults and Task 2-6 numbers unchanged; Task 2-4 tests re-run):
+  `preconditioner="two_level"` (+ `coarse_block`) in all three solvers; `effective_conductivity(..., directions=)`;
+  `effective_elasticity(..., load_cases=)` (unsolved columns NaN; localization needs all six).
+- Scripts: `scripts/task7_finite_gap.py` (run suites, `--estimate-only`, `--quick`, `--table-only`),
+  `scripts/task7_fit_discrepancy.py` (models + tables), `scripts/task7_figures.py`.
+- Model file `models/finite_gap_correction.json` (fitted coefficients + metadata, plain JSON).
+- Tests: `tests/test_finite_gap.py` (26). `configs/reference.yaml`: gradient limit now evidence-based (below).
+
+**Set-up and decisions**
+1. *Strip* = lattice of N cells across the gap (x = r), periodic and one cell wide in y = s and z = axial, plus a
+   solid wall layer t_w = 0.5 L; periodic in x too, so one wall bounds every lattice layer on both sides (no slip,
+   perfect bond, k_s). N ∈ {1, 1.5, 2, 3, 4, 6, 8}; N = 1.5 cuts the two walls at different phases.
+2. *Same grid for strip and bulk*: the strip lattice is a bit-exact x-tiling of the bulk reference cell (same n,
+   same cut phase, same bisection threshold), so the voxel staircase error (Tasks 2-4: up to 17 % for k_eff) cancels
+   in q_strip/q_bulk. Checked: n = 24/32/48 change δ by ≤ 0.4 pp (K_t), ≤ 0.6 pp (k_n), ≤ 1.4 pp (C_nn, G_t at N = 1).
+3. *Walls removed analytically* ("bulk closure + plain walls" = laminate of homogeneous layers, exact for laminates,
+   tested against Backus and the slit/series cases): k_n from T/k_stack = H/k_n + t_w/k_s; K_t = (T/H) K_stack[yz];
+   C from the **laminate mixed form** (tractions s_xx, s_xz, s_xy and in-plane strains continuous; the map
+   [s_n; e_t] → [e_n; s_t] is volume-additive) → full 6×6 apparent core tensor.
+4. *Quantities*: k_n = through-gap conductivity; K_t = in-plane permeability (mean of K_ss, K_zz; flow along the gap);
+   C_nn = C_rrrr normal stiffness across the gap; **G_t = (G_rs + G_rz)/2 = (C66 + C55)/2, the shear with the walls
+   sliding parallel to each other — this is what carries torque (G_rs) and thrust (G_rz) from sleeve to outer wall**;
+   G_sz = C44, shear in the plane of the gap. ("In-plane shear" in the plan was ambiguous; both are reported.)
+5. *Cut phase*: default cuts φ0 ∈ {0, 1/3, 2/3}. **For gyroid and diamond the 4_1 screws along x and the 2-fold axes ⟂ x
+   make φ ≡ φ + 1/4 ≡ −φ**, so the distinct cuts lie in [0, L/8]; 1/3 and 2/3 both reduce to L/12 (identical results,
+   verified), so an extra cut L/8 was added for G/D → distinct cuts {0, L/12, L/8}. Blends (trigonal) have no such
+   symmetry: 3 distinct cuts over a full period. Analyses use one row per distinct cut (`distinct_cuts`).
+   Screw symmetry is also a test (K_ss ↔ K_zz, G_rs ↔ G_rz under φ → φ + 1/4).
+6. *Discrepancy*: δ_q = q_strip/q_hom − 1 (corrected closure q = q_bulk (1 + δ)); the error of the homogenized
+   prediction is −δ/(1+δ). Graded strips: q_hom = local closures at every voxel layer combined like a laminate
+   (harmonic k, arithmetic K, mixed-form C) with log-Euclidean PCHIP interpolation of bulk cells at
+   ρ* = 0.175…0.525 (step 0.025).
+
+**Public API (`voxlat.homogenization.finite_gap`; main names also in `voxlat.homogenization`)**
+```python
+GapSpec(w, rho, N, phase=0, gradient=0, a_z=1, wall=0.5, n=32)  # .n_lattice .n_wall .layer_rho .case_id
+build_strip(spec) -> Strip(.solid (x, y, z) bool, .thresholds, .layer_density); bulk_cell(w, rho, n, phase, a_z)
+strip_properties(spec, preconditioner="two_level", k_s=, k_f=, E=, nu=) -> (Strip, GapProperties)
+bulk_properties(w, rho, n, phase, a_z) -> GapProperties
+GapProperties: .k_n [W/mK] .K_t (2x2, L^2) .C (6x6 Pa) + stack values; .scalars() -> k_n, K_t, K_s, K_z, C_nn,
+    G_t, G_rs, G_rz, G_sz, C_tt; .dimensionless()
+compute_properties(solid, n, n_lattice, n_wall, quantities=("k","K","C"))  # any stack, wall removed
+laminate_mixed_form(C), from_mixed_form(M), laminate_average(Cs, f), laminate_core(C_stack, C_wall, f_wall)
+BulkInterpolator(rhos, props); homogenized_properties(spec, bulk); discrepancy(strip, hom); homogenized_error(delta)
+reduced_phase(w, phase); distinct_cuts(df); brinkman_channel_factor(N, K/L^2)
+PhysicalDiscrepancyModel(quantities).fit(df) .predict(q, N, w, rho, a_z, gradient) .predict_std(q, N)
+GPDiscrepancyModel(physical).fit(df).predict(df); grouped_cv(df, groups="theta"|"N", strata=)
+corr = FiniteGapCorrection.load()          # models/finite_gap_correction.json
+corr.factor(q, N, w, rho, a_z=1, gradient=0) -> 1 + delta (phase-averaged);  corr.factor_std(q, N)
+# voxlat.homogenization.coarse: TwoLevelPreconditioner(A, P), box_aggregates, scalar_coarse_basis, rigid_body_coarse_basis
+```
+
+**Results (n = 32, wall 0.5 L; phase mean over distinct cuts; `results/task7_coefficients.txt`)**
+
+δ [%] at N = 1 / 2 / 3 (the jacket has h = 6 mm, L = 2–6 mm → N = 1–3):
+
+| | ρ* | k_n | K_t | C_nn | G_t | G_sz |
+|---|---|---|---|---|---|---|
+| Gyroid | 0.25 | −2.1/−1.0/−0.7 | **−28.4/−14.2/−9.4** | +7.3/+3.5/+2.3 | +7.3/+3.4/+2.2 | +11.4/+5.6/+3.7 |
+| | 0.35 | −2.3/−1.1/−0.8 | **−26.6/−13.3/−8.9** | +4.1/+1.9/+1.3 | +3.3/+1.5/+1.0 | +4.2/+2.1/+1.4 |
+| | 0.45 | −1.9/−1.0/−0.6 | **−25.4/−12.7/−8.5** | +1.9/+0.9/+0.6 | +1.6/+0.7/+0.5 | +1.9/+0.9/+0.6 |
+| Diamond | 0.25 | −0.5/−0.3/−0.2 | **−22.4/−11.2/−7.5** | +4.4/+2.1/+1.4 | −2.0/−1.1/−0.8 | +11.2/+5.5/+3.6 |
+| | 0.35 | −0.7/−0.4/−0.2 | **−20.3/−10.2/−6.8** | +4.4/+2.1/+1.4 | −3.7/−1.9/−1.3 | +7.7/+3.8/+2.5 |
+| | 0.45 | −0.5/−0.3/−0.2 | **−18.7/−9.4/−6.2** | +4.4/+2.2/+1.4 | −3.9/−2.0/−1.4 | +5.5/+2.7/+1.8 |
+| Blend 0.5 | 0.25 | +9.7/+4.3/+2.8 | −26.5/−13.4/−9.1 | +85/+18/+11 | +53/+18/+11 | +105/+52/+35 |
+| | 0.35 | +13.9/+5.9/+3.7 | −23.9/−12.0/−8.1 | +86/+15/+9 | +51/+17/+10 | +84/+41/+27 |
+| | 0.45 | +1.4/+0.7/+0.4 | −23.4/−11.7/−7.8 | +9.4/+4.3/+2.8 | +6.8/+3.1/+2.0 | +14/+7/+5 |
+
+RQ1 answers:
+1. **The dominant finite-gap error is the in-plane permeability: the bulk closure over-predicts K_t by 23–40 % at N = 1
+   (δ = −19 … −28 %), 10–17 % at N = 2, 7–10 % at N = 3** — the whole jacket design range. It is cleanly ∝ 1/N
+   (rms deviation 0.4 pp per (θ, cut); adding a 1/N² term changes nothing), almost independent of ρ* and of the cut
+   (G/D phase std of a ≤ 0.011), i.e. a fixed wall layer of thickness a L/2 ≈ 0.13 L (G), 0.10 L (D), 0.12 L (blend)
+   that carries no flow. **No near-wall channelling** (`task7_velocity_slices.png`): the planar porosity next to a cut
+   TPMS equals the bulk's (unlike packed beds), the wall closes the pores it cuts and the flow deficit is confined to
+   ≈ L/4 of each wall; the interior profile equals the bulk profile. Brinkman with μ_e = μ (2√K/L = 0.14 G, 0.11 D,
+   0.13 blend at ρ* = 0.35) under-predicts the loss by ~1.9×, and a scales with L, not √K (a ≈ const in ρ*).
+   Stretch a_z = 0.75 / 1 / 1.5: a_K = 0.24 / 0.27 / 0.30 (G), 0.18 / 0.20 / 0.25 (D).
+2. **Through-gap conductivity: negligible for G/D** (|δ| ≤ 2.3 %, G −2 %/N, D ≈ 0, below the Task 6 k_eff surrogate
+   error); the walls' constriction/spreading of strut contacts nearly balance. Blends at ρ* ≤ 0.35: +10–14 % at N = 1,
+   strongly cut dependent (up to +38 % for one cut).
+3. **Stiffness: the bonded walls stiffen the core.** G/D at N = 1 (∝ 1/N): C_nn +2…+7 %, G_t +1.6…+7 % (G) and −2…−4 % (D),
+   G_sz +2…+11 %. Blends below ρ* ≈ 0.4: **+50…+190 % at N = 1** (cut through the pinch necks of Tasks 1-3: the wall
+   replaces the weakest links; the bulk blend is only 0.013–0.027 E_s stiff there), not ∝ 1/N at N = 1 and dominated
+   by the cut phase.
+
+**Discrepancy model — fitted correction (`models/finite_gap_correction.json`)**
+- series (k_n, C_nn, G_t): q/q_bulk = (1 + c_g g²) / (1 + a/N);  parallel (K_t, G_sz): q/q_bulk = (1 + c_g g²)(1 − a/N);
+  a > 0 = loss, a < 0 = gain. a(θ) = β·[1, r, w, b, r w, r b, ln a_z], r = (ρ* − 0.35)/0.1, b = 4w(1−w); least
+  squares on the observed a with rows weighted by 1/N (error in δ); c_g from the G/D graded strips.
+
+| q | 1 | r | w | b | r·w | r·b | ln a_z | c_g | phase std of a |
+|---|---|---|---|---|---|---|---|---|---|
+| k_n | +0.0206 | −0.0011 | −0.0164 | −0.0729 | +0.0011 | +0.0248 | −0.0312 | +0.05 | 0.065 |
+| **K_t** | **+0.2663** | −0.0147 | **−0.0616** | +0.0110 | −0.0035 | −0.0001 | +0.0891 | −1.29 | 0.039 |
+| C_nn | −0.0385 | +0.0234 | −0.0034 | −0.2056 | −0.0239 | +0.1111 | −0.0563 | +0.84 | 0.065 |
+| G_t | −0.0383 | +0.0261 | +0.0680 | −0.2169 | −0.0170 | +0.1032 | −0.0320 | +0.81 | 0.046 |
+| G_sz | −0.0589 | +0.0473 | −0.0294 | −0.5978 | −0.0190 | +0.4105 | +0.0099 | −0.70 | 0.115 |
+
+  Handy values: a_K = 0.266 (G), 0.205 (D), 0.251 (blend) at ρ* = 0.35, a_z = 1 → **K_eff = K_bulk (1 − 0.27/N)** for the
+  gyroid. Observed a per morphology/density: `results/task7_wall_coefficients.csv`.
+- **Which is sufficient?** Leave-one-(w, ρ*, a_z)-out CV, rms error of δ in pp (`results/task7_model_cv.csv`,
+  `task7_discrepancy_models.png`; "floor" = pooled scatter over cut phases, which no (N, θ)-model can remove):
+
+| | k_n | K_t | C_nn | G_t | G_sz |
+|---|---|---|---|---|---|
+| G/D: uncorrected / physical / +GP / floor | 1.15 / 0.85 / 0.85 / 0.96 | **12.9 / 0.40 / 0.40 / 0.28** | 2.79 / 1.17 / 1.16 / 1.31 | 2.23 / 0.98 / 1.04 / 0.82 | 4.26 / 1.77 / 1.95 / 0.67 |
+| blend: uncorrected / physical / +GP / floor | 7.4 / 7.9 / 7.9 / 7.5 | **12.9 / 3.5 / 3.5 / 4.1** | 32 / 26 / 27 / 24 | 20 / 18 / 18 / 9.8 | 38 / 21 / 21 / 11 |
+
+  Leave-one-N-out (extrapolation in N) gives the same picture (G/D K_t 13.4 → 0.29 pp, = floor).
+  **The physical 1/N form is sufficient; the GP on its residuals never helps** (≤ 0.1 pp better, sometimes worse):
+  what remains is cut-phase scatter (aleatoric for a homogenized model) or, for blends, the pinch-neck cut effect,
+  neither of which is a smooth function of (N, θ, g). For blends the stiffness corrections are not predictable from
+  (N, θ) at all (residual ≈ floor ≈ 10–25 pp) — another reason to keep mid-w out of the low-ρ* region in Task 11.
+
+**Graded strips (`results/task7_graded.csv`, `task7_graded_error.png`)** — gradient effect relative to the uniform
+strip with the same N, mid-gap ρ* and cut, Δ_g = (1+δ_graded)/(1+δ_uniform) − 1. G/D, worst single cut, any quantity:
+**g = |∇ρ*| L = 0.025: 0.9 %, 0.05: 1.0 %, 0.075: 2.0 %, 0.15: 3.5 %** (largest for K_t, which drops: momentum
+exchange between fast low-ρ* and slow high-ρ* layers that a local Darcy closure cannot see). → **`max_density_change_per_cell`
+= 0.05 confirmed** (was a placeholder since Task 0; ≤ 1 % local-closure error for G/D). Blends: Δ_g = −8…−20 % (G_sz),
+−4…+11 % (C_nn) already at small g, because their wall effect changes across the pinch transition (ρ* ≈ 0.375) as
+the wall densities move; no gradient limit makes graded blends safe there.
+
+**Checks (`task7_convergence.png`, `results/task7_convergence.csv`, `results/task7_wall_thickness.csv`)**
+- Resolution n = 24 / 32 / 48 (G, D; ρ* = 0.35; N = 1, 2, 4): K_t to 0.4 pp, k_n 0.6 pp, G_t / G_sz ≤ 1 pp,
+  C_nn ≤ 1.4 pp (N = 1). The n = 32 stiffness δ therefore carry ~±1.5 pp at N = 1.
+- Wall thickness t_w/L = 1/8 … 1: K_t exactly independent; k_n and G_t converge by 0.5 L (within 0.2–0.4 pp of 1 L);
+  thin walls (1/8 L) bias k_n up by ~2 pp (heat crosses a thin periodic wall between aligned strut contacts without
+  spreading) and G_t down by ~3 pp (wall bending); C_nn varies ±1 pp non-monotonically. Real walls are 1.5–2 mm = 0.25–1 L.
+- Exact cases (tests): laminate mixed form = Backus; empty gap = MAC slit (H²+2)/12; series laminate k; solid gap =
+  solid; no-wall integer-N strip = bulk to 1e-6; screw symmetry; two-level = Jacobi to 1e-6.
+
+**Timings (sandbox, 2 parallel workers, two-level, incl. extraction)**: median per strip at n = 32: N = 1: 11 s, N = 2: 18 s,
+N = 4: 30 s, N = 8: 53 s (blends 13 / 22 / 50 / 96 s);
+n = 48: N = 2 ~55–65 s, N = 8 blend 390 s (peak RSS 2.3 GB). Iterations: elasticity 113–344, Stokes 116–683, conduction
+82–135 (Jacobi on the N = 8 gyroid strip: 1100–1350 elasticity iterations, 271 s). Full n = 32 study (336 strips +
+157 bulk cells): 92 min on 2 cores. Fit + CV: 3.5 min. Figures: 1.5 min (velocity fields cached).
+
+**Optional overnight run (n = 48, production numbers)**
+```powershell
+python scripts/task7_finite_gap.py --estimate-only --suite uniform graded stretch --n 48 --n-jobs 4
+python scripts/task7_finite_gap.py --suite uniform graded stretch --n 48 --n-jobs 4   # ~3-4 h, <= 2.3 GB per worker
+python scripts/task7_fit_discrepancy.py      # picks n = 48 automatically once its uniform suite (231 strips) is complete
+python scripts/task7_figures.py
+```
+Sandbox estimate 8.5 CPU-h (the n = 32 estimate was ~25 % low); 4 workers need ≤ ~9 GB. Resumable: rerun the same
+command. Use `--preconditioner auto` to try pyamg on the laptop (results agree to the solver tolerance).
+
+**Open issues / notes for later tasks**
+1. **Task 9 must apply the K correction**: K_t,eff = K_bulk (1 − a_K/N), N = h/L (local), ≈ −9…−28 % in the jacket
+   range — larger than every other closure uncertainty. Apply it to the in-plane (s, z) permeability only; the
+   through-gap (r) component is irrelevant in the depth-averaged model. `FiniteGapCorrection.factor("K_t", ...)`.
+   k_n: skip for G/D (|δ| ≤ 2 %). Stiffness: the correction is conservative to ignore for G/D (walls stiffen) except
+   diamond G_t (−2…−4 % at N = 1); use G_t (not G_sz) for torque/thrust transfer.
+2. a is defined for the gap N = h/L with L the radial cell size; for graded designs use local L and ρ*.
+   Valid: N ≥ 1, ρ* 0.25–0.45 fitted (0.2–0.5 graded), a_z 0.75–1.5, network TPMS with bonded walls.
+3. **Cut phase is a free design choice (Task 12)**: for G/D its effect is small (K_t ±0.5 pp, stiffness ±1–2 pp at
+   N = 1); for blends ±7 pp in K_t and up to a factor 2 in stiffness. Task 12 should fix the phase at the sleeve and
+   report it; `factor_std` gives the phase scatter.
+4. Blends with ρ* < 0.4: finite-gap stiffness corrections are cut-dependent and unpredictable (consistent with the
+   Task 1-6 pinch-neck findings) — another argument to restrict mid-w at low ρ* in Task 11.
+5. The stiffness extraction attributes all wall-lattice interaction energy to the lattice layer (the definition of an
+   apparent core property); in-plane quantities (G_sz, C_tt) are wall-dominated in the stack (at N = 1 the wall carries
+   ~3–10× the core's in-plane stiffness), so their δ are sensitive to small modelling details — report them as secondary.
+6. Gradient study is radial (across the gap), the design (Task 11) grades in-plane (s, z). The radial result bounds the
+   local-closure error per unit gradient for series (k_n, C_nn) and parallel (K_t) combinations alike; an in-plane
+   graded check could be added in Task 9 if needed.
+7. Numbers are at n = 32; the overnight n = 48 run would tighten stiffness δ by ~1 pp (K_t is already converged).
+8. Citations to verify: Brinkman 1949 (Appl. Sci. Res. A1:27) / Neale & Nader 1974 (Can. J. Chem. Eng. 52:475) for
+   the Brinkman channel; Backus 1962 and Postma 1955 (Geophysics 20:780) for the laminate mixed form; Vaněk, Mandel &
+   Brezina 1996 (Computing 56:179) and Toselli & Widlund 2005 for aggregation / two-level preconditioning; space groups
+   I4₁32 / Fd-3m of the gyroid / diamond networks (e.g. Schröder-Turk et al. 2006; Hyde et al. 1997) for the cut-phase
+   symmetry; near-wall porosity/channelling in packed beds (e.g. Benenati & Brosilow 1962, AIChE J. 8:359) for the contrast.
+9. Workspace: PyPI blocked (no pyamg, pyarrow, torch); numpy 2.5.3, scipy 1.18.1, scikit-learn 1.9.1, Python 3.13.
+
+**Figures** (`results/figures/`): `task7_error_vs_N.png` (main figure: δ vs 1/N, 5 quantities, G/D top, blend bottom,
+cut range bars, model lines, jacket band), `task7_discrepancy_models.png` (CV: uncorrected / physical / +GP / floor),
+`task7_velocity_slices.png` (u_z slices and plane-averaged profiles, N = 2, n = 48), `task7_graded_error.png`,
+`task7_convergence.png` (resolution and wall thickness). Tables: `results/task7_*.csv`, `results/task7_coefficients.txt`,
+`results/task7_fit_log.txt`; data `data/finite_gap.csv`.
+
+**Tests**: 361 passed + 6 skipped (pyamg ×3, pyarrow-dependent ×3) in 16.9 min, Tasks 0–7 incl. slow
+(`results/task7_pytest_log.txt`). Task 7 alone (`tests/test_finite_gap.py`): 27 tests in ~25 s.
 
 ## Task 8 — Literature closures
 _not started_

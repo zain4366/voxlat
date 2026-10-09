@@ -29,6 +29,10 @@ data/fields/
 # Task 5: per-sample resume cache + run logs (data/closures.parquet is the deliverable)
 data/*_parts/
 data/*_build.log
+# Task 7: per-strip / per-bulk-cell resume cache (data/finite_gap.csv is the deliverable)
+data/finite_gap/
+results/task7_velocity_fields.npz
+results/task7_quick/
 *.stl
 *.vdb
 models/**/*.pt

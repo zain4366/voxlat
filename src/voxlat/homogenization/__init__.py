@@ -40,6 +40,14 @@ from voxlat.homogenization.stokes import (
     permeability_tpms,
     solve_stokes,
 )
+from voxlat.homogenization.finite_gap import (
+    FiniteGapCorrection,
+    GapProperties,
+    GapSpec,
+    build_strip,
+    bulk_properties,
+    strip_properties,
+)
 from voxlat.homogenization.convergence import (
     ConvergenceFit,
     fit_convergence,
@@ -72,6 +80,12 @@ __all__ = [
     "permeability",
     "permeability_tpms",
     "solve_stokes",
+    "FiniteGapCorrection",
+    "GapProperties",
+    "GapSpec",
+    "build_strip",
+    "bulk_properties",
+    "strip_properties",
     "ConvergenceFit",
     "fit_convergence",
     "observed_order",

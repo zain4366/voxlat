@@ -31,7 +31,7 @@ voxlat/
 ├── configs/reference.yaml # single source of truth for the reference problem
 ├── scripts/               # one script per figure / table / long run
 ├── tests/                 # pytest verification tests
-├── data/                  # computed tables (*.parquet)
+├── data/                  # computed tables (*.parquet; Task 7: finite_gap.csv)
 ├── models/                # trained surrogate models
 ├── results/figures/       # 300-dpi PNG figures
 ├── docs/                  # per-task explainers (docs/task1_explained.md, ...)
@@ -190,6 +190,30 @@ K, K_std = out["K"]                                  # (3, 3) m^2; also K_princi
 Every tensor is symmetric positive definite and has the exact symmetry class of theta
 (cubic / tetragonal / trigonal / triclinic); std's are first-order predictive standard
 deviations. Accuracy table: STATUS.md, Task 6.
+
+## Finite-gap study (Task 7, RQ1)
+
+Lattice strips of N = 1 ... 8 cells between bonded solid walls, solved with the Task 2-4
+solvers and compared with the bulk ("plain-wall") homogenized prediction; graded strips,
+resolution and wall-thickness checks; a physical 1/N correction plus a GP on its residuals.
+
+```powershell
+python scripts/task7_finite_gap.py --estimate-only --n 48         # time 3 strips, print the runtime
+python scripts/task7_finite_gap.py --suite all --n-jobs 2         # n = 32, all suites (~1.5 h on 2 cores)
+python scripts/task7_finite_gap.py --suite uniform graded stretch --n 48 --n-jobs 4   # overnight, n = 48 (~3-4 h)
+python scripts/task7_fit_discrepancy.py                           # models/finite_gap_correction.json + tables
+python scripts/task7_figures.py                                   # results/figures/task7_*.png
+```
+
+```python
+from voxlat.homogenization import FiniteGapCorrection
+corr = FiniteGapCorrection.load()                                 # models/finite_gap_correction.json
+K_t = K_bulk * corr.factor("K_t", N=6e-3 / L, w=0.0, rho=0.35)    # also k_n, C_nn, G_t, G_sz
+```
+
+The solvers accept `preconditioner="two_level"` (Jacobi + aggregation coarse space, no pyamg
+needed), `effective_conductivity(..., directions=)` and `effective_elasticity(..., load_cases=)`.
+Results and coefficients: STATUS.md, Task 7.
 
 ## Conventions
 

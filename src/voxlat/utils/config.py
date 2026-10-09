@@ -216,7 +216,7 @@ class DesignBounds:
 class ManufacturingConfig:
     min_wall_thickness: float  # m
     min_pore_size: float  # m
-    max_density_change_per_cell: float  # |grad rho*| * L  (placeholder, see YAML)
+    max_density_change_per_cell: float  # |grad rho*| * L  (set by Task 7, see YAML)
 
 
 @dataclass(frozen=True)

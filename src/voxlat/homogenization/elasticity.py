@@ -92,7 +92,11 @@ Preconditioned conjugate gradients (scipy ``cg``), relative residual tol 1e-8.
 Preconditioner: pyamg smoothed aggregation (V-cycle, 3x3 nodal blocks, translation
 near-null space) if pyamg is installed, else Jacobi (diagonal). Nodal 3x3
 block-Jacobi is available but saves only ~4 % of the iterations and costs more per
-iteration (Task 3 timings). The operator is
+iteration (Task 3 timings). ``preconditioner="two_level"`` (Task 7) adds an
+aggregation coarse space with the 6 rigid-body modes per 8^3-voxel box to
+Jacobi (``voxlat.homogenization.coarse``): ~6x fewer iterations on long
+finite-gap strips without pyamg. ``load_cases`` (Task 7) solves only some of the
+six unit strains (unsolved columns of C_eff are NaN). The operator is
 the assembled CSR matrix (vectorized, chunked COO assembly; required for AMG) or a
 matrix-free element-by-element product (``operator="matrix_free"``; memory ~25x
 smaller, used automatically for very large grids).
@@ -161,7 +165,7 @@ __all__ = [
 
 LOG = get_logger("homogenization.elasticity")
 
-Preconditioner = Literal["auto", "amg", "block_jacobi", "jacobi", "none"]
+Preconditioner = Literal["auto", "amg", "block_jacobi", "jacobi", "two_level", "none"]
 Operator = Literal["auto", "assembled", "matrix_free"]
 
 #: Voigt / Mandel component order
@@ -310,6 +314,7 @@ class _Mesh:
     n_nodes: int  # active nodes
     comp: np.ndarray  # (n_nodes,) connected-component label
     n_comp: int
+    node_grid: np.ndarray | None = None  # (n_nodes,) flat periodic node-grid index of each active node
 
 
 def _build_mesh(Efield: np.ndarray) -> _Mesh:
@@ -338,7 +343,7 @@ def _build_mesh(Efield: np.ndarray) -> _Mesh:
     else:
         n_comp, comp = 0, np.zeros(0, dtype=np.int64)
     return _Mesh(shape, Efield.ravel()[vox].astype(np.float64), vox, edof, n_nodes,
-                 comp.astype(np.int64), int(n_comp))
+                 comp.astype(np.int64), int(n_comp), np.flatnonzero(used))
 
 
 def _assemble(mesh: _Mesh, K1: np.ndarray, chunk_entries: int = 8_000_000) -> sp.csr_matrix:
@@ -469,13 +474,29 @@ def _pcg_block(
 
 
 def _preconditioner(
-    kind: str, mesh: _Mesh, K1: np.ndarray, K: sp.csr_matrix | None
+    kind: str, mesh: _Mesh, K1: np.ndarray, K: sp.csr_matrix | None, coarse_block: int | None = None
 ) -> tuple[Any, str]:
     if kind == "auto":
         kind = "amg" if (pyamg_available() and K is not None) else "jacobi"
     ndof = 3 * mesh.n_nodes
     if kind == "none":
         return None, "none"
+    if kind == "two_level":
+        if K is None:
+            raise ValueError("preconditioner='two_level' needs operator='assembled'")
+        from voxlat.homogenization.coarse import (
+            DEFAULT_COARSE_BLOCK,
+            TwoLevelPreconditioner,
+            box_aggregates,
+            rigid_body_coarse_basis,
+        )
+
+        block = int(coarse_block or DEFAULT_COARSE_BLOCK)
+        gi = np.stack(np.unravel_index(mesh.node_grid, mesh.shape), axis=1)
+        labels = box_aggregates(gi, mesh.shape, block)
+        d = np.einsum("nii->ni", _block_diagonal(mesh, K1)).ravel()
+        Mtl = TwoLevelPreconditioner(K, rigid_body_coarse_basis(gi, labels, block), diag=d)
+        return _Precond(ndof, Mtl), "two_level"
     if kind == "jacobi":
         d = np.einsum("nii->ni", _block_diagonal(mesh, K1)).ravel()
         dinv = np.where(d > 0, 1.0 / np.where(d > 0, d, 1.0), 0.0)
@@ -803,6 +824,8 @@ def effective_elasticity(
     return_fields: bool = False,
     check: bool = True,
     agreement_tol: float = 1e-5,
+    load_cases: Sequence[int | str] | None = None,
+    coarse_block: int | None = None,
 ) -> ElasticityResult:
     """Periodic effective stiffness tensor (6x6 Voigt) of a voxel cell by Q1 voxel FEA.
 
@@ -821,7 +844,9 @@ def effective_elasticity(
         PCG relative residual tolerance.
     preconditioner:
         "auto" (AMG if pyamg is installed and the matrix is assembled, else
-        Jacobi), "amg", "block_jacobi", "jacobi" or "none".
+        Jacobi), "amg", "block_jacobi", "jacobi", "two_level" (Jacobi + rigid-body
+        aggregation coarse space; needs the assembled operator; recommended for
+        long grids without pyamg) or "none".
     operator:
         "assembled" (CSR), "matrix_free", or "auto" (assembled unless the matrix
         would exceed ~6e7 non-zeros, i.e. ~0.7 GB).
@@ -841,6 +866,14 @@ def effective_elasticity(
     check:
         Raise ``RuntimeError`` if PCG fails or flux/energy C_eff disagree by more
         than ``agreement_tol`` (relative to max|C|).
+    load_cases:
+        Unit strains to solve, as Voigt indices 0-5 or names from ``VOIGT_ORDER``
+        (default: all six). Column j of ``C_eff_flux`` (all six rows) and the
+        energy-form entries (i, j) exist only for solved i, j; the rest is NaN, so
+        derived properties (S, moduli, eigenvalues) are NaN/undefined. Localization
+        and ``return_fields`` need all six cases.
+    coarse_block:
+        Aggregate edge in voxels for ``preconditioner="two_level"`` (default 8).
 
     Returns
     -------
@@ -876,6 +909,17 @@ def effective_elasticity(
     if not (Efield > 0).any():
         raise ValueError("cell has no stiff voxel")
 
+    if load_cases is None:
+        cases = tuple(range(6))
+    else:
+        cases = tuple(sorted({VOIGT_ORDER.index(c) if isinstance(c, str) else int(c) for c in load_cases}))
+        if not cases or any(c not in range(6) for c in cases):
+            raise ValueError(f"load_cases must be a subset of 0..5 / {VOIGT_ORDER}, got {load_cases}")
+    partial = len(cases) < 6
+    if partial and (localization or return_fields):
+        raise ValueError("localization and return_fields need all six load cases (load_cases=None)")
+    ncase = len(cases)
+
     K1, F1, Bc, D1 = hex8_element(float(nu))
     mesh = _build_mesh(Efield)
     ndof = 3 * mesh.n_nodes
@@ -883,7 +927,8 @@ def effective_elasticity(
 
     if operator == "auto":
         est_nnz = 3.0 * mesh.n_nodes * 3 * 27 * 0.85
-        operator = "matrix_free" if (est_nnz > _AUTO_MATRIX_FREE_NNZ and preconditioner != "amg") else "assembled"
+        needs_matrix = preconditioner in ("amg", "two_level")
+        operator = "matrix_free" if (est_nnz > _AUTO_MATRIX_FREE_NNZ and not needs_matrix) else "assembled"
     ta = time.perf_counter()
     if operator == "assembled":
         K = _assemble(mesh, K1)
@@ -893,7 +938,7 @@ def effective_elasticity(
         A = _MatrixFree(mesh, K1)
     else:
         raise ValueError(f"unknown operator {operator!r}")
-    M, pc_name = _preconditioner(preconditioner, mesh, K1, K)
+    M, pc_name = _preconditioner(preconditioner, mesh, K1, K, coarse_block)
     t_asm = time.perf_counter() - ta
     if maxiter is None:
         maxiter = max(5000, 100 * max(shape))
@@ -907,24 +952,24 @@ def effective_elasticity(
 
     flat = mesh.edof.ravel()
     Ee = mesh.E_el
-    F = np.empty((ndof, 6))
-    for j in range(6):
+    F = np.empty((ndof, ncase))
+    for c, j in enumerate(cases):
         fe = -(Ee[:, None] * F1[:, j][None, :])  # (Ne, 24) unit eigen-strain load
-        F[:, j] = _proj(np.bincount(flat, weights=fe.ravel(), minlength=ndof))
+        F[:, c] = _proj(np.bincount(flat, weights=fe.ravel(), minlength=ndof))
     # forces of a unit eigenstrain cancel exactly in a homogeneous region; treat a load
     # that is round-off relative to the uncancelled element forces as exactly zero
-    fscale = np.sqrt(float(np.sum(Ee**2))) * np.linalg.norm(F1, axis=0)
+    fscale = np.sqrt(float(np.sum(Ee**2))) * np.linalg.norm(F1, axis=0)[list(cases)]
     fnorm = np.linalg.norm(F, axis=0)
     F[:, fnorm <= 1e-12 * fscale] = 0.0
     fnorm = np.linalg.norm(F, axis=0)
     ts = time.perf_counter()
     if block_solve and operator == "assembled":  # the matrix-free product gains nothing
         Xs, iters, resid, conv = _pcg_block(A, F, M, tol, maxiter)
-        U = [_proj(Xs[:, j]) for j in range(6)]
-        tcase = [(time.perf_counter() - ts) / 6.0] * 6
+        U = [_proj(Xs[:, c]) for c in range(ncase)]
+        tcase = [(time.perf_counter() - ts) / ncase] * ncase
     else:
         U, iters, resid, conv, tcase = [], [], [], [], []
-        for j in range(6):
+        for j in range(ncase):
             tc = time.perf_counter()
             if fnorm[j] == 0.0:
                 U.append(np.zeros(ndof))
@@ -946,32 +991,34 @@ def effective_elasticity(
             tcase.append(time.perf_counter() - tc)
     t_solve = time.perf_counter() - ts
     if check:
-        for j in range(6):
-            if not conv[j] and resid[j] > 10 * tol:
+        for c in range(ncase):
+            if not conv[c] and resid[c] > 10 * tol:
                 raise RuntimeError(
-                    f"PCG did not converge for load case {VOIGT_ORDER[j]}: relative residual "
-                    f"{resid[j]:.2e} after {iters[j]} iterations"
+                    f"PCG did not converge for load case {VOIGT_ORDER[cases[c]]}: relative residual "
+                    f"{resid[c]:.2e} after {iters[c]} iterations"
                 )
 
     # ---- effective tensor: flux and energy forms ------------------------------
     Vs = float(Ee.sum())
-    C_flux = np.empty((6, 6))
-    C_en = np.empty((6, 6))
-    P = []  # (Ne, 6): F1^T u_e^(j)
-    for j in range(6):
-        ue = U[j][mesh.edof]
+    C_flux = np.full((6, 6), np.nan)
+    C_en = np.full((6, 6), np.nan)
+    P = []  # (Ne, 6): F1^T u_e^(j), solved cases in order
+    for c in range(ncase):
+        ue = U[c][mesh.edof]
         P.append(ue @ F1)
-    for j in range(6):
-        C_flux[:, j] = (Vs * D1[:, j] + (Ee[:, None] * P[j]).sum(axis=0)) / N
-    for i in range(6):
-        ui = U[i][mesh.edof]
-        for j in range(i, 6):
-            uj = U[j][mesh.edof] if j != i else ui
+    for c, j in enumerate(cases):
+        C_flux[:, j] = (Vs * D1[:, j] + (Ee[:, None] * P[c]).sum(axis=0)) / N
+    for a, i in enumerate(cases):
+        ui = U[a][mesh.edof]
+        for b in range(a, ncase):
+            j = cases[b]
+            uj = U[b][mesh.edof] if b != a else ui
             q = float(np.sum(Ee * np.einsum("ek,ek->e", ui @ K1, uj)))
-            v = Vs * D1[i, j] + float(Ee @ P[j][:, i]) + float(Ee @ P[i][:, j]) + q
+            v = Vs * D1[i, j] + float(Ee @ P[b][:, i]) + float(Ee @ P[a][:, j]) + q
             C_en[i, j] = C_en[j, i] = v / N
-    scale = float(np.max(np.abs(C_en)))
-    agreement = float(np.max(np.abs(C_flux - C_en)) / scale) if scale > 0 else 0.0
+    sel = np.ix_(cases, cases)
+    scale = float(np.max(np.abs(C_en[sel])))
+    agreement = float(np.max(np.abs(C_flux[sel] - C_en[sel])) / scale) if scale > 0 else 0.0
     if check and agreement > agreement_tol:
         raise RuntimeError(f"flux- and energy-based C_eff disagree: rel. diff {agreement:.2e}")
 

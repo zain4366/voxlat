@@ -60,6 +60,11 @@ Solver: preconditioned conjugate gradients (scipy.sparse.linalg.cg), relative
 residual tol 1e-8 by default. Preconditioner: algebraic multigrid
 (pyamg smoothed aggregation, V-cycle) if pyamg is installed, else Jacobi
 (diagonal). Jacobi is enough for n <= 64 (see STATUS.md, Task 2, timings).
+``preconditioner="two_level"`` (Task 7) adds a piecewise-constant aggregation
+coarse space to Jacobi (``voxlat.homogenization.coarse``); it removes the
+iteration growth on long grids (finite-gap strips) without pyamg.
+``directions`` (Task 7) restricts the solve to some macroscopic gradients; the
+unsolved columns/rows of k_eff are NaN.
 
 Units: k_s, k_f in W/(m K) (or any consistent unit); k_eff has the same unit.
 Defaults come from the reference config (AlSi10Mg 130, water-glycol 0.40 W/(m K)).
@@ -95,7 +100,7 @@ __all__ = [
 
 LOG = get_logger("homogenization.conduction")
 
-Preconditioner = Literal["auto", "amg", "jacobi", "none"]
+Preconditioner = Literal["auto", "amg", "jacobi", "two_level", "none"]
 
 
 # =============================================================================
@@ -191,7 +196,13 @@ def _face_drops(theta: np.ndarray, G: Sequence[float]) -> list[np.ndarray]:
     return [np.roll(theta, -1, axis=d) - theta + G[d] for d in range(3)]
 
 
-def _make_preconditioner(A: sp.csr_matrix, kind: Preconditioner) -> tuple[Any, str]:
+def _make_preconditioner(
+    A: sp.csr_matrix,
+    kind: Preconditioner,
+    active: np.ndarray | None = None,
+    shape: Sequence[int] | None = None,
+    coarse_block: int | None = None,
+) -> tuple[Any, str]:
     if kind == "auto":
         kind = "amg" if pyamg_available() else "jacobi"
     if kind == "none":
@@ -199,6 +210,20 @@ def _make_preconditioner(A: sp.csr_matrix, kind: Preconditioner) -> tuple[Any, s
     if kind == "jacobi":
         dinv = 1.0 / A.diagonal()
         return LinearOperator(A.shape, matvec=lambda x: dinv * x, dtype=np.float64), "jacobi"
+    if kind == "two_level":
+        from voxlat.homogenization.coarse import (
+            DEFAULT_COARSE_BLOCK,
+            TwoLevelPreconditioner,
+            box_aggregates,
+            scalar_coarse_basis,
+        )
+
+        if active is None or shape is None:
+            raise ValueError("two_level needs the active mask and the grid shape")
+        block = int(coarse_block or DEFAULT_COARSE_BLOCK)
+        gi = np.stack(np.unravel_index(np.flatnonzero(active), tuple(shape)), axis=1)
+        P = scalar_coarse_basis(box_aggregates(gi, shape, block))
+        return TwoLevelPreconditioner(A, P), "two_level"
     if kind == "amg":
         try:
             import pyamg
@@ -315,6 +340,8 @@ def effective_conductivity(
     return_fields: bool = False,
     check: bool = True,
     agreement_tol: float = 1e-5,
+    directions: Sequence[int] | None = None,
+    coarse_block: int | None = None,
 ) -> ConductivityResult:
     """Periodic effective conductivity tensor of a voxel cell.
 
@@ -331,7 +358,9 @@ def effective_conductivity(
     tol:
         PCG relative residual tolerance ||b - A theta|| / ||b||.
     preconditioner:
-        "auto" (AMG if pyamg is installed, else Jacobi), "amg", "jacobi" or "none".
+        "auto" (AMG if pyamg is installed, else Jacobi), "amg", "jacobi",
+        "two_level" (Jacobi + aggregation coarse space, no pyamg needed; best for
+        long grids such as finite-gap strips) or "none".
     maxiter:
         PCG iteration cap per solve (default 20 * total voxels^(1/3) * 10, >= 2000).
     return_fields:
@@ -339,6 +368,12 @@ def effective_conductivity(
     check:
         Raise ``RuntimeError`` if flux- and energy-based k_eff differ by more than
         ``agreement_tol`` (relative to max|k_eff|), or if PCG did not converge.
+    directions:
+        Macroscopic gradients to solve (subset of (0, 1, 2); default all three).
+        Column j of ``k_eff_flux`` and the (i, j) entries of the energy form exist
+        only for solved i, j; the rest is NaN (then ``eigenvalues`` etc. are NaN).
+    coarse_block:
+        Aggregate edge in voxels for ``preconditioner="two_level"`` (default 8).
 
     Returns
     -------
@@ -377,13 +412,22 @@ def effective_conductivity(
     n_comp, labels = connected_components(A, directed=False)
     counts = np.bincount(labels, minlength=n_comp).astype(float)
 
-    M, pc_name = _make_preconditioner(A, preconditioner) if n_act > 0 else (None, "none")
+    if directions is None:
+        dirs = (0, 1, 2)
+    else:
+        dirs = tuple(sorted({int(d) for d in directions}))
+        if not dirs or any(d not in (0, 1, 2) for d in dirs):
+            raise ValueError(f"directions must be a subset of (0, 1, 2), got {directions}")
 
-    drops_all: list[list[np.ndarray]] = []
+    M, pc_name = (
+        _make_preconditioner(A, preconditioner, active, shape, coarse_block) if n_act > 0 else (None, "none")
+    )
+
+    drops_all: dict[int, list[np.ndarray]] = {}
     iters: list[int] = []
     resid: list[float] = []
     thetas = np.zeros((3, *shape), dtype=np.float32) if return_fields else None
-    for j in range(3):
+    for j in dirs:
         G = [0.0, 0.0, 0.0]
         G[j] = 1.0
         b_full = _rhs(kf, G)
@@ -415,20 +459,21 @@ def effective_conductivity(
         theta = theta_full.reshape(shape)
         if thetas is not None:
             thetas[j] = theta
-        drops_all.append(_face_drops(theta, G))
+        drops_all[j] = _face_drops(theta, G)
 
-    K_flux = np.empty((3, 3))
-    K_en = np.empty((3, 3))
-    for j in range(3):
+    K_flux = np.full((3, 3), np.nan)
+    K_en = np.full((3, 3), np.nan)
+    for j in dirs:
         for d in range(3):
             K_flux[d, j] = float(np.sum(kf[d] * drops_all[j][d])) / N
-    for i in range(3):
-        for j in range(i, 3):
+    for a, i in enumerate(dirs):
+        for j in dirs[a:]:
             e = sum(float(np.sum(kf[d] * drops_all[i][d] * drops_all[j][d])) for d in range(3)) / N
             K_en[i, j] = K_en[j, i] = e
 
-    scale = float(np.max(np.abs(K_en)))
-    agreement = float(np.max(np.abs(K_flux - K_en)) / scale) if scale > 0 else 0.0
+    sel = np.ix_(dirs, dirs)
+    scale = float(np.max(np.abs(K_en[sel])))
+    agreement = float(np.max(np.abs(K_flux[sel] - K_en[sel])) / scale) if scale > 0 else 0.0
     if check and agreement > agreement_tol:
         raise RuntimeError(
             f"flux- and energy-based k_eff disagree: rel. diff {agreement:.2e} > {agreement_tol:.0e}"
