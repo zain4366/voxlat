@@ -215,6 +215,23 @@ The solvers accept `preconditioner="two_level"` (Jacobi + aggregation coarse spa
 needed), `effective_conductivity(..., directions=)` and `effective_elasticity(..., load_cases=)`.
 Results and coefficients: STATUS.md, Task 7.
 
+## Literature closures (Task 8)
+
+The inertial (Forchheimer) coefficient and the interstitial heat-transfer coefficient come from published
+pore-scale CFD of skeletal gyroid/diamond cells (Gajetti et al. 2025; Savoldi et al. 2026), with validity
+boxes that warn on extrapolation. Table, recommendations and risks: `docs/task8_literature_closures.md`.
+
+```powershell
+python scripts/task8_literature_closures.py      # results/task8_*.csv, results/figures/task8_*.png (~5 s)
+```
+
+```python
+from voxlat.closures import forchheimer_coefficient, interstitial_heat_transfer
+cf = forchheimer_coefficient(phi, w)                                   # C_F (blends: log-linear in w)
+r = interstitial_heat_transfer(U_s, phi, a_sf, K_bulk, w=w, conductivity=0.40,
+                               kinematic_viscosity=2.3e-6, prandtl=20.7) # r.h_sf, r.h_sf_a_sf, r.nusselt
+```
+
 ## Conventions
 
 - SI units inside the code; unit cells on normalized coordinates [0,1)³ scaled by cell size L.

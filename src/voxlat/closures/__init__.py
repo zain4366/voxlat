@@ -6,6 +6,12 @@ Forchheimer (Task 8).
 >>> design = build_design(256)          # 256 Sobol + 8 corners + 12 edges + 14 pure-line points
 >>> len(design), design[0].id
 (290, 'corner-0')
+
+Literature closures (Task 8, ``voxlat.closures.empirical``):
+
+>>> from voxlat.closures import forchheimer_coefficient
+>>> round(float(forchheimer_coefficient(0.5, 0.0)), 4)     # gyroid, Gajetti et al. (2025)
+0.3184
 """
 
 from voxlat.closures.dataset import (
@@ -23,8 +29,46 @@ from voxlat.closures.dataset import (
     run_samples,
     sobol_design,
 )
+from voxlat.closures.empirical import (
+    LITERATURE,
+    RECOMMENDED,
+    CorrelationRangeError,
+    CorrelationRangeWarning,
+    InterstitialHeatTransfer,
+    check_range,
+    forchheimer_coefficient,
+    friction_factor,
+    friction_factor_re,
+    hydraulic_diameter,
+    interstitial_heat_transfer,
+    literature_table,
+    nusselt_interstitial,
+    pressure_gradient,
+    range_report,
+    reynolds_hydraulic,
+    reynolds_permeability,
+)
 
 __all__ = [
+    # Task 8: literature closures
+    "LITERATURE",
+    "RECOMMENDED",
+    "CorrelationRangeError",
+    "CorrelationRangeWarning",
+    "InterstitialHeatTransfer",
+    "check_range",
+    "forchheimer_coefficient",
+    "friction_factor",
+    "friction_factor_re",
+    "hydraulic_diameter",
+    "interstitial_heat_transfer",
+    "literature_table",
+    "nusselt_interstitial",
+    "pressure_gradient",
+    "range_report",
+    "reynolds_hydraulic",
+    "reynolds_permeability",
+    # Task 5: dataset
     "DatasetSettings",
     "DesignSpace",
     "Sample",
