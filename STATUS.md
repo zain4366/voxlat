@@ -14,7 +14,7 @@ Plan: project doc `claude/voxlat_task_plan.md`. Reference numbers: `configs/refe
 | 5 | Closure dataset | **done** (2026-10-08, run on the laptop; record reconstructed in Task 6) |
 | 6 | Closure surrogates | **done** (2026-10-09) |
 | 7 | Finite-gap study (RQ1) | **done** (2026-10-09, n = 32 in the sandbox; n = 48 overnight run optional) |
-| 8 | Literature closures (Nu, Forchheimer) | not started |
+| 8 | Literature closures (Nu, Forchheimer) | **done** (2026-10-10) |
 | 9 | Homogenized jacket device model | not started |
 | 10 | Baselines B1–B3 | not started |
 | 11 | Multi-objective optimization (RQ2, RQ3) | not started |
@@ -1166,8 +1166,194 @@ cut range bars, model lines, jacket band), `task7_discrepancy_models.png` (CV: u
 **Tests**: 361 passed + 6 skipped (pyamg ×3, pyarrow-dependent ×3) in 16.9 min, Tasks 0–7 incl. slow
 (`results/task7_pytest_log.txt`). Task 7 alone (`tests/test_finite_gap.py`): 27 tests in ~25 s.
 
-## Task 8 — Literature closures
-_not started_
+## Task 8 — Literature closures (Nu, Forchheimer)  ✅
+
+**Built**
+- `src/voxlat/closures/empirical.py` — C_F and interstitial Nu correlations with published validity boxes,
+  `CorrelationRangeWarning` / `CorrelationRangeError`, a literature registry (`LITERATURE`, `literature_table()`),
+  packed-bed references for cross-checks, and the convenience chain `interstitial_heat_transfer`. Main names
+  re-exported from `voxlat.closures`.
+- `tests/test_empirical.py` (26 tests, < 1 s): published coefficients, the papers' own tabulated CFD values, the
+  Darcy–Forchheimer/friction identity, Pr scaling and the Re → 0 limit, validity warnings, reference values of the
+  packed-bed correlations, and **independent checks of Tasks 1 and 4 against the published CFD** (below).
+- `scripts/task8_literature_closures.py` (~5 s) → `results/task8_literature_table.csv`,
+  `results/task8_operating_range.csv`, `results/task8_nusselt_comparison.csv`, `results/figures/task8_forchheimer.png`,
+  `results/figures/task8_nusselt.png`.
+- `docs/task8_literature_closures.md` — the full literature table, recommendations, risk table and the manuscript
+  limitations paragraph.
+
+**Definitions (module docstring)**: φ = 1 − ρ*, D_h = 4φ/a_sf (a_sf per total volume), U_b = U_s/φ,
+**Re_Dh = U_b D_h/ν = 4U_s/(a_sf ν)**, Re_K = U_s√K/ν, Fo = C_F Re_K; −∇p = μU_s/K + ρC_F U_s²/√K;
+f = (dp/dx) D_h/(½ρU_b²) (Darcy-type, 4× Fanning), so **f Re = 2φD_h²/K + 2φ²C_F (D_h/√K) Re** (Savoldi et al. 2026, Eq. 23);
+Nu = h_sf D_h/k_f with h_sf the surface-averaged wall flux over (T_wall − T_bulk) on the whole solid–fluid interface.
+
+**Public API (`voxlat.closures.empirical`)**
+```python
+forchheimer_coefficient(porosity, w=0, source="gajetti2025"|"gajetti2025_table"|"savoldi2026", re=None,
+                        on_extrapolation="warn"|"raise"|"ignore") -> C_F        # blends: ln C_F linear in w
+pressure_gradient(U_s, K, C_F, density=, dynamic_viscosity=) -> |grad p| [Pa/m]
+friction_factor_re(Re, porosity, D_h, K, C_F) -> f Re  (finite at Re = 0);  friction_factor(...) -> f
+nusselt_interstitial(Re, porosity, f_Re, Pr, variant=1, pr_exponent=1/3, w=0, on_extrapolation=) -> Nu_Dh
+interstitial_heat_transfer(U_s, porosity, a_sf, K_bulk, w=0, conductivity=, kinematic_viscosity=, prandtl=,
+                           cf=None, cf_source=, variant=1, pr_exponent=1/3) -> InterstitialHeatTransfer
+    # .h_sf [W/m2K] .h_sf_a_sf [W/m3K] .nusselt .reynolds .friction .friction_re .cf .hydraulic_diameter
+hydraulic_diameter, equivalent_particle_diameter (6(1-phi)/a_sf), pore_velocity, reynolds_hydraulic,
+reynolds_permeability, forchheimer_number, stanton_savoldi2026(Re, phi, f, variant)
+gajetti2025_permeability / gajetti2025_forchheimer (phi, tpms); savoldi2026_hydraulic_diameter / _permeability /
+_forchheimer (phi); nusselt_gnielinski_packed_bed(Re_p, Pr, phi); nusselt_wakao_kaguei(Re_p, Pr);
+nusselt_reynolds2023(Re, Pr)
+check_range(key, re=, porosity=, pr=, w=, on_extrapolation=) ; range_report(...) -> fractions outside each bound
+LITERATURE[key] -> CorrelationInfo(.citation .doi .tpms .method .fluid .re_definition .formula .validity ...)
+literature_table(implemented_only=False) -> DataFrame ; RECOMMENDED (dict)
+GAJETTI2025_POWER_LAWS, GAJETTI2025_TABLE2, SAVOLDI2026_HYDRAULICS, SAVOLDI2026_STANTON, RATHORE2023_CF
+```
+
+**Literature table** (coefficients read from the open-access full texts unless noted; full table with methods in
+`docs/task8_literature_closures.md`, machine-readable in `results/task8_literature_table.csv`)
+
+| Source | TPMS | Re; φ; Pr | Formula | Obtained by |
+|---|---|---|---|---|
+| **Gajetti et al. 2025** [1] | G, D, Split-P, skeletal | Re_Dh 0.3–100; φ 0.30–0.60 | K/L² = aφⁿ, C_F = bφᵐ (G: 0.0156, 2.78, 0.0908, −1.81; D: 0.0106, 2.89, 0.0666, −1.69) | OpenFOAM, periodic cell, water |
+| Savoldi et al. 2026 [2] hydraulics | G, skeletal | Re_Dh 20–100; φ 0.3–0.7 | D_h/L = 4φ/(−5.723φ² + 5.729φ + 1.665); K/L² = 0.0157φ^2.72; C_F = 0.0784φ^−2.04 | same group |
+| Rathore et al. 2023 [3] | D, G, I-WP, P | Re ≤ 100 (channel length); φ = 0.32 | data: C_F 1.173 (G), 0.525 (D) | DNS of a 4-cell channel |
+| **Savoldi et al. 2026** [2] Eq. 37 | G, skeletal, interstitial | Re_Dh 20–100; φ 0.3–0.7; **Pr = 1** | St = 0.0267 φ^0.19 f (±11 %) | CFD, uniform wall T and q |
+| Savoldi et al. 2026 [2] Eqs. 38–39 | as above | as above | St = 0.135 φ^2.06 Re^(0.440−φ) f (±15 %) | as above |
+| Savoldi et al. 2026 [2] Eq. 40 | as above | as above | St = 0.034 φ^0.20 Re^(−0.061−0.0023φ) f (±12 %) | as above |
+| Cheng et al. 2021 [4] | W, P, D, G porous media | Re_h 10–129; ε 0.2–0.8; air | Nu(Re_h, ε), flow resistance — **coefficients not accessed** | pore-scale CFD |
+| Iyer et al. 2022 [5] | sheet TPMS / nodal surfaces | laminar, Re ≲ 350 | **not accessed** | CFD |
+| Reynolds et al. 2023 [6] | gyroid HX | Re_Dh 100–2500; air | Nu = 0.49 Re^0.62 Pr^0.4 (quoted by [7]) | experiment |
+| Brambati et al. 2024 [7] | G, P, D sheet, φ 0.7–0.9 | Re 5000–50000; Pr 0.7–7 | Nu_Dh = 0.0964 Re_Dp^0.7136 Pr^0.4 — turbulent, not applicable | conjugate RANS |
+| Piandoro et al. 2026 [8] | gyroid sheet | EG (Pr ≈ 154), EG/water Pr 14 | Nu = (23.44 + 7.5φ)√Re_por, f ≈ 1 + 1/Re_por (wall-to-bulk h of a filled duct) | CFD + L-PBF |
+| Gnielinski [9] | packed spheres | Re_p 0.1–1000; Pr 0.4–1000 | Nu_p = (1 + 1.5(1−φ))(2 + √(Nu_lam² + Nu_turb²)) | experiments |
+| Wakao & Kaguei [10] | packed spheres | Re_p 3–3000 | Nu_p = 2 + 1.1 Re_p^0.6 Pr^(1/3) | experiments |
+| Ergun [11] (via [1]) | packed beds | — | 150/Re* + 1.75 — rejected by [1] (30–50 % errors for TPMS) | experiments |
+| Kuwahara et al. 2001 [12] | square-rod arrays | φ 0.2–0.9; Pr = 1 | (porosity term) + (Re term)Pr^(1/3) — coefficients not verified, not implemented | CFD |
+
+**Recommended closures (`RECOMMENDED`)**
+1. **C_F: Gajetti et al. 2025 power laws** (gyroid, diamond; blends ln C_F linear in w). Reasons: the only source with
+   G *and* D from one method (consistent blend interpolation); skeletal cells like ours; Re range from the Darcy regime
+   (0.3) separates K and C_F cleanly; the gyroid refit of Savoldi et al. 2026 (to φ = 0.7) stays within 10 % over
+   φ = 0.5–0.8, which bounds the gyroid extrapolation. `source="gajetti2025_table"` (Table 2 held constant outside
+   φ = 0.3–0.6) is the upper bracket for diamond.
+2. **Nu: Savoldi et al. 2026, variant 1 (Eq. 37) × Pr^(1/3)**, with f from our bulk K, our a_sf and the Gajetti C_F:
+   `Nu = 0.0267 φ^0.19 (f Re) Pr^(1/3)`. Reasons: the only laminar, skeletal, porosity-resolved interstitial
+   correlation we could verify; variant 1 extrapolates physically (constant Nu as Re → 0, Forchheimer-controlled growth
+   at high Re, monotone over the whole jacket box), whereas variant 2 makes Nu *fall* with Re outside its box
+   (φ = 0.8, Pr = 1: 10.0 → 7.4 between Re 10 and 50) and is 0.33–0.94× variant 1 at Re = 600; with Pr^(1/3) variant 1
+   stays within **0.63–1.37×** of the Pr-validated Gnielinski packed-bed correlation over the box (variant 2: down to 0.27×).
+   Price: inside the fitted box variant 2 has more symmetric residuals and is up to 22 % lower at its high-φ/high-Re
+   corner → **run variant 2 as the low-h bound in Task 9/11 sensitivity runs**.
+
+**Independent verification of our solvers against the published CFD (tests)**
+| Quantity | Literature | VoxLat (Task 1/4) | Difference |
+|---|---|---|---|
+| K/L², gyroid φ = 0.5 / 0.6 | 2.2e-3 / 3.9e-3 ([1] Table 2) | 2.224e-3 / 3.829e-3 | +1.1 % / −1.8 % |
+| K/L², diamond φ = 0.5 / 0.6 | 1.4e-3 / 2.4e-3 | 1.410e-3 / 2.390e-3 | +0.7 % / −0.4 % |
+| D_h/L, gyroid φ = 0.5–0.7 | fit of [2] | 4φ/(a_sf L) | ≤ 0.3 % |
+| K/L², gyroid φ = 0.5–0.7 vs fit of [2] | | | −0.5 … +7 % inside; their power law is 17 % low at φ = 0.8 (outside its range) → use our K, never literature K fits |
+Body-fitted OpenFOAM vs our voxel MAC solver agree to the 2-digit precision of their table: a citable validation of Task 4.
+
+**Jacket operating box** (`results/task8_operating_range.csv`; w ∈ {0, 0.5, 1}, ρ* 0.20–0.50, L = 2/4/6 mm, 1–5 L/min,
+mean superficial velocity U_s = Q/(2 h L_ax) of the two half-annulus paths)
+| Quantity | Range (median) |
+|---|---|
+| Re_Dh | 25 – 577 (153); 70 % of points > 100 |
+| Re_K | 0.9 – 37 (7.4) |
+| C_F | 0.097 – 0.32 (0.165) |
+| Fo = C_F Re_K | 0.19 – 5.4 → **inertia is 16 – 84 % of the pressure drop** (median 56 %) |
+| Nu_Dh (variant 1, Pr = 20.7) | 15 – 105 (32) |
+| h_sf | 1.7 – 11 kW/(m² K) (4.9); h_sf a_sf 0.7 – 20 MW/(m³ K) |
+| Nominal (3 L/min, L = 4 mm, ρ* = 0.35) G / blend / D | Re_Dh 195 / 178 / 158; Fo 2.0 / 1.5 / 1.1; Nu 41 / 35 / 30 (variant 2: 31 / 27 / 23); h_sf 4.7 / 4.4 / 4.2 kW/(m² K) |
+
+**Extrapolation risk (flag in the paper)**
+1. **Pr**: the Nu data are at Pr = 1; Pr^(1/3) multiplies h_sf by 2.75 at Pr = 20.7. Exponent 0.4 (Brambati et al.'s turbulent
+   TPMS fit 0.39–0.40; Reynolds et al.'s assumption) gives +22 %. Only TPMS data near our Pr: Piandoro et al. (sheet gyroid,
+   Pr 14–154, wall-based h, no Pr exponent). Cross-check: Gnielinski (valid Pr 0.4–1000) 0.63–1.37×.
+2. **Re**: both closures fitted to Re_Dh ≤ 100; 70 % of operating points lie above (max 577). C_F is assumed constant
+   (strong-inertia form) beyond the weak-inertia range it was fitted in; variants 1 and 2 differ by up to 3× at Re = 600, φ = 0.8.
+3. **Porosity**: C_F fitted to φ ≤ 0.6 (67 % of the operating box is above), Nu to φ ≤ 0.7 (38 % above). Diamond C_F at
+   φ > 0.6: power law vs Table-2 plateau differ 1.2–2.0× → pump-power uncertainty of the same order on the inertial share.
+4. **Topology**: Nu only calibrated for the gyroid; diamond and blends via the analogy with their own f. No C_F or Nu data
+   for G–D blends at all (interpolation).
+5. **Single source**: [1] and [2] come from one group with one CFD set-up; the only independent C_F (Rathore et al., φ = 0.32,
+   4-cell channel with walls) is 1.15× (D) and 1.64× (G) of [1].
+6. **Finite gap and roughness**: literature closures are bulk; the Task 7 wall correction is for creeping-flow K only. Savoldi
+   et al. note systematically higher measured f for printed gyroids (roughness, finite size; Hirokawa & Miyata 2024).
+
+**Notes for Task 9**
+1. Use the **bulk** K (`ClosureModel`, not wall-corrected) in f Re, in Fo and in the inertial term ρC_F|U|U/√K; apply the
+   Task 7 factor (1 − a_K/N) to the viscous Darcy term only. For anisotropic K use K_e = 1/(e·K⁻¹·e) along the local
+   velocity direction e.
+2. `interstitial_heat_transfer` handles U = 0 (Darcy-limit Nu, variant 1 only) and vectorized grids. Expect
+   `CorrelationRangeWarning`s (Re, Pr, porosity, topology) on every evaluation: log `range_report(...)` once per run and
+   then pass `on_extrapolation="ignore"`.
+3. Sensitivity set for the paper: {variant 1, variant 2} × {Pr^(1/3), Pr^0.4} × {C_F power law, Table-2 plateau}.
+4. h_sf is the fluid-side coefficient at a uniform-T/uniform-q surface (non-conjugate CFD); strut conduction (fin
+   efficiency) must come from the solid-phase equation of the two-equation model with k_eff (Task 2/6).
+
+**Manuscript limitations paragraph (~150 words)** — also in `docs/task8_literature_closures.md`:
+
+> Two closures of the device model are taken from the literature. The inertial (Forchheimer) coefficient comes from
+> pore-scale simulations of skeletal gyroid and diamond cells fitted for porosities of 0.3–0.6 and Re_Dh ≤ 100 (Gajetti
+> et al., 2025). Our jacket operates at porosities of 0.5–0.8 and Re_Dh ≈ 25–580, where inertia carries 16–84 % of the
+> pressure drop, so pumping-power predictions inherit this extrapolation; for diamond above φ = 0.6, plausible C_F values
+> differ by up to a factor of two. The interstitial heat-transfer coefficient follows the modified Reynolds analogy of
+> Savoldi et al. (2026), calibrated for the gyroid at Pr = 1, φ ≤ 0.7 and Re_Dh = 20–100. We extend it to the water–glycol
+> coolant (Pr ≈ 21) with the Chilton–Colburn factor Pr^(1/3), and to diamond and blends through their own friction
+> factors; an exponent of 0.4 would raise h_sf by 22 %. Removing these assumptions requires experiments or conjugate
+> pore-resolved simulations at the operating Prandtl number.
+
+**References** (open access = read in full; "to verify" = bibliographic details not confirmed from a primary page)
+1. Gajetti E., Boccardo G., Savoldi L., Marocco L. (2025). Hydrodynamic characterization of Gyroid, Diamond and Split-P
+   Triply Periodic Minimal Surfaces as porous medium. *Int. J. Heat Mass Transf.* 252, 127439.
+   doi:10.1016/j.ijheatmasstransfer.2025.127439 (open access: re.public.polimi.it/handle/11311/1293551).
+2. Savoldi L., Cammi A., Gajetti E., Marocco L. (2026). A modified Reynolds analogy for the Gyroid TPMS in laminar flow:
+   Thermal-hydraulic correlations, numerical validation and multi-objective optimisation. *Int. J. Heat Fluid Flow* 121,
+   110631. doi:10.1016/j.ijheatfluidflow.2026.110631 (open access: re.public.polimi.it/handle/11311/1324787).
+   Text/caption mismatches in the paper: Eq. 38 coefficient 0.135 (Fig. 15: 0.134), Eq. 40 0.034 (Fig. 16: 0.0342); we use the equations.
+3. Rathore S.S., Mehta B., Kumar P., Asfer M. (2023). Flow characterization in triply periodic minimal surface (TPMS)-based
+   porous geometries: Part 1 — Hydrodynamics. *Transp. Porous Media* 146, 669–701. doi:10.1007/s11242-022-01880-7 (arXiv:2205.03591).
+4. Cheng Z., Li X., Xu R., Jiang P. (2021). Investigations on porous media customized by triply periodic minimal surface:
+   Heat transfer correlations and strength performance. *Int. Commun. Heat Mass Transf.* 129, 105713.
+   doi:10.1016/j.icheatmasstransfer.2021.105713. Companion: Cheng Z., Xu R., Jiang P.-X. (2021) *Int. J. Heat Mass Transf.*
+   170, 120902, doi:10.1016/j.ijheatmasstransfer.2021.120902.
+5. Iyer J., Moore T., Nguyen D., Roy P., Stolaroff J. (2022). Heat transfer and pressure drop characteristics of heat
+   exchangers based on triply periodic minimal and periodic nodal surfaces. *Appl. Therm. Eng.* 209, 118192 (to verify).
+6. Reynolds B.W., Fee C.J., Morison K.R., Holland D.J. (2023). Characterisation of heat transfer within 3D printed TPMS
+   heat exchangers. *Int. J. Heat Mass Transf.* (volume/article to verify; correlation taken from [7], Eq. 21).
+7. Brambati G., Guilizzoni M., Foletti S. (2024). Convective heat transfer correlations for Triply Periodic Minimal
+   Surfaces based heat exchangers. *Appl. Therm. Eng.* 242, 122492. doi:10.1016/j.applthermaleng.2024.122492 (open access).
+8. Piandoro S., Azzini F., Francioso M., Zha D., Liverani E., Pulvirenti B., Fortunato A. (2026). Laser 3D-printed periodic
+   porous structures for heat exchangers: a novel characterization approach under fully developed conditions.
+   *Lasers Manuf. Mater. Process.* 13, 555–581. doi:10.1007/s40516-026-00347-7 (open access).
+9. Gnielinski V. (1981). *Int. Chem. Eng.* 21(3); Gnielinski V. (1982) *Verfahrenstechnik* 16(1); VDI Heat Atlas, 2nd ed.
+   (2010). Implementation and example value as in the `ht` Python library (C. Bell, `ht.conv_packed_bed`).
+10. Wakao N., Kaguei S. (1982). *Heat and Mass Transfer in Packed Beds*. Gordon & Breach (Taylor & Francis).
+11. Ergun S. (1952). Fluid flow through packed columns. *Chem. Eng. Prog.* 48, 89–94.
+12. Kuwahara F., Shirota M., Nakayama A. (2001). A numerical study of interfacial convective heat transfer coefficient in
+    two-energy equation model for convection in porous media. *Int. J. Heat Mass Transf.* 44, 1153–1159.
+13. Hirokawa & Miyata (2024), cited by [2] for measured gyroid friction factors (details to verify).
+14. Al-Safadi M., Ejaz F., Shuja S.Z., Zubair S.M. (2026). Quantitative synthesis and correlations of heat transfer and
+    friction factor in TPMS structures. *Results Eng.* 29, 109402. doi:10.1016/j.rineng.2026.109402 — open-access
+    meta-analysis of 57 studies with unified Nu/f correlations; **not read** (the publisher site blocked automated access).
+    Worth reading before the manuscript; it may supersede rows of the table.
+
+**Open issues**
+1. Coefficients of Cheng et al. 2021 (closest scope: porous TPMS, ε 0.2–0.8, Re_h 10–129) and Iyer et al. 2022 were not
+   accessible here; if you can download them (NUST library), add them to `LITERATURE` and the comparison figure.
+2. Read Al-Safadi et al. 2026 [14] (open access) and check whether its unified laminar correlations change the recommendation.
+3. A cheap way to retire the Pr risk later: a periodic-cell conjugate check with our own Stokes velocity field and an
+   advection–diffusion solve at Pr = 1 and 20 (would measure the Pr exponent for our geometries; outside the Task 8 scope).
+4. Workspace: PyPI blocked; tests ran on numpy 2.5.3, scipy 1.18.1, pandas 3.0.5, Python 3.13 with pytest from a uv tool env.
+
+**Figures** (`results/figures/`): `task8_forchheimer.png` ((a) C_F vs φ — Gajetti fits with Table 2 points, Savoldi gyroid
+fit, Rathore points, diamond plateau, jacket band; (b) our Task 4 K vs the published K fits; (c) inertial share of the pressure
+drop vs flow rate, ρ* = 0.35, L = 2/4/6 mm), `task8_nusselt.png` (Nu_Dh vs Re_Dh at Pr = 20.7 for G φ = 0.65, G φ = 0.80,
+D φ = 0.65: variants 1–3 × Pr^(1/3), the Pr^0.4 band, Gnielinski and Wakao–Kaguei; fitted box and jacket range marked).
+
+**Tests**: `tests/test_empirical.py` 26 passed in 0.3 s; full suite `-m "not slow"` 371 passed + 4 skipped (pyamg ×2,
+pyarrow ×2) in 1.8 min (`results/task8_pytest_log.txt`). The 18 slow tests were not re-run: Task 8 adds no solver code
+and only appends imports to `voxlat.closures`.
 
 ## Task 9 — Homogenized jacket device model
 _not started_

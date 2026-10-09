@@ -1,0 +1,35 @@
+# Task 8 test log - 2026-10-09T20:37Z, Python 3.13.16, numpy 2.5.3, scipy 1.18.1
+## tests/test_empirical.py -v
+tests/test_empirical.py::test_published_coefficients PASSED              [  3%]
+tests/test_empirical.py::test_gajetti_power_laws_reproduce_their_table2[gyroid] PASSED [  7%]
+tests/test_empirical.py::test_gajetti_power_laws_reproduce_their_table2[diamond] PASSED [ 11%]
+tests/test_empirical.py::test_savoldi_hydraulics_spot_values PASSED      [ 15%]
+tests/test_empirical.py::test_task4_permeability_matches_gajetti_cfd[gyroid-0.5-2] PASSED [ 19%]
+tests/test_empirical.py::test_task4_permeability_matches_gajetti_cfd[gyroid-0.6-3] PASSED [ 23%]
+tests/test_empirical.py::test_task4_permeability_matches_gajetti_cfd[diamond-0.5-2] PASSED [ 26%]
+tests/test_empirical.py::test_task4_permeability_matches_gajetti_cfd[diamond-0.6-3] PASSED [ 30%]
+tests/test_empirical.py::test_task1_surface_area_and_task4_K_match_savoldi_gyroid PASSED [ 34%]
+tests/test_empirical.py::test_dimensionless_groups PASSED                [ 38%]
+tests/test_empirical.py::test_friction_factor_is_darcy_forchheimer[0.5-0.31] PASSED [ 42%]
+tests/test_empirical.py::test_friction_factor_is_darcy_forchheimer[0.8-0.12] PASSED [ 46%]
+tests/test_empirical.py::test_stanton_equals_nusselt_over_re_at_pr1 PASSED [ 50%]
+tests/test_empirical.py::test_savoldi_variants_agree_inside_their_box PASSED [ 53%]
+tests/test_empirical.py::test_nusselt_low_re_limit_and_pr_scaling PASSED [ 57%]
+tests/test_empirical.py::test_variant2_is_not_monotone_outside_its_box PASSED [ 61%]
+tests/test_empirical.py::test_forchheimer_sources_and_blend PASSED       [ 65%]
+tests/test_empirical.py::test_validity_warnings PASSED                   [ 69%]
+tests/test_empirical.py::test_range_report_fractions PASSED              [ 73%]
+tests/test_empirical.py::test_gnielinski_reference_value PASSED          [ 76%]
+tests/test_empirical.py::test_wakao_kaguei_reference_value PASSED        [ 80%]
+tests/test_empirical.py::test_reynolds2023_formula PASSED                [ 84%]
+tests/test_empirical.py::test_recommended_nu_brackets_pr_validated_packed_bed PASSED [ 88%]
+tests/test_empirical.py::test_interstitial_heat_transfer_chain PASSED    [ 92%]
+tests/test_empirical.py::test_literature_table_and_recommendation PASSED [ 96%]
+tests/test_empirical.py::test_module_doctests PASSED                     [100%]
+============================== 26 passed in 0.32s ==============================
+## full suite, -m 'not slow'
+SKIPPED [1] tests/test_conduction.py:294: pyamg not installed
+SKIPPED [1] tests/test_dataset.py:293: could not import 'pyarrow': No module named 'pyarrow'
+SKIPPED [1] tests/test_elasticity.py:289: pyamg not installed
+SKIPPED [1] tests/test_surrogates.py:585: Task 5 closure table not readable (needs data/closures.parquet + pyarrow, or VOXLAT_CLOSURE_TABLE)
+371 passed, 4 skipped, 18 deselected, 110 warnings in 105.72s (0:01:45)
