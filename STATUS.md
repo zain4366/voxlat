@@ -11,8 +11,8 @@ Plan: project doc `claude/voxlat_task_plan.md`. Reference numbers: `configs/refe
 | 2 | Conduction homogenization k_eff | **done** (2026-10-08) |
 | 3 | Elasticity homogenization C_eff | **done** (2026-10-08) |
 | 4 | Stokes permeability K | **done** (2026-10-08) |
-| 5 | Closure dataset | not started |
-| 6 | Closure surrogates | not started |
+| 5 | Closure dataset | **done** (2026-10-08, run on the laptop; record reconstructed in Task 6) |
+| 6 | Closure surrogates | **done** (2026-10-09) |
 | 7 | Finite-gap study (RQ1) | not started |
 | 8 | Literature closures (Nu, Forchheimer) | not started |
 | 9 | Homogenized jacket device model | not started |
@@ -689,11 +689,287 @@ Data: `results/task4_*.csv`, `results/task4_pytest_log.txt`.
 **Tests**: 268 passed + 3 skipped (pyamg) in 7.9 min (Tasks 0–4, incl. slow; `results/task4_pytest_log.txt`).
 Task 4 alone: 49 passed + 1 skipped; `pytest -m "not slow" tests/test_stokes.py` runs 44 tests in ~30 s.
 
-## Task 5 — Closure dataset
-_not started_
+## Task 5 — Closure dataset  ✅
 
-## Task 6 — Closure surrogates
-_not started_
+> The Task 5 session's own STATUS notes were not in the repo (this section said *not started*
+> although commit 02b1054 holds the code and `data/closures.parquet`). The record below was
+> reconstructed in Task 6 from the table, `voxlat.closures.dataset`, the README and the demo log.
+
+**Built** — `src/voxlat/closures/dataset.py` (design, per-sample computation, resumable parts,
+consolidation, quick-look plot), `scripts/build_dataset.py` (`--estimate-only`, `--n-jobs`,
+`--plot-only`, `--quick`), `tests/test_dataset.py`, README section "Closure dataset (Task 5)".
+API: `from voxlat.closures import build_design, compute_sample, run_samples, consolidate, read_table`.
+
+**Dataset (`data/closures.parquet`, 290 rows x 170 columns, all `status == "ok"`)**
+| Item | Value |
+|---|---|
+| Design | 256 scrambled Sobol (seed 20261008) + 8 corners + 12 edge midpoints + 14 pure-line points (w in {0, 1}, a_z = 1, rho* = 0.20:0.05:0.50) |
+| Box | w in [0, 1], rho* in [0.20, 0.50], a_z on 27 exact levels l/32 = 0.6875 ... 1.5 |
+| Estimators | k_eff, C_eff, K: Richardson R(32, 64); geometry metrics at n = 64; localization from the n = 64 grid |
+| Settings hash | `64f53a501dd4` (k_s 130, k_f 0.4, E_s 70 GPa, nu 0.33, tol 1e-8) |
+| Run | Windows 11, Python 3.13.7, numpy 2.5.3, git 677c30ae3ab7(+dirty); 2026-10-08 16:28-23:51 UTC (7.4 h wall), 27.8 CPU-h; AMG (3 timing rows Jacobi) |
+| Cost per sample | median 312 s (pure 250 s, blends 322 s), max 628 s; peak RSS <= 2.0 GB |
+| Topology | every cell: one solid and one fluid component, both percolating |
+| Regression check | pure-line rows reproduce the Task 2-4 tables, e.g. gyroid rho* = 0.35: k/k_s 0.2079, K/L^2 4.887e-3, E*/E_s 0.0998, a_sf L 2.970 |
+
+**Found in Task 6 (data quality)** — stretched pure cells carry *voxel symmetry-breaking*: for
+diamond at a_z = 22/32 the 4_1 screw axis (translation c/4 = 5.5 voxels at n = 32) is off-grid, so
+k_xy reaches 3 % of k_xx and C16 2 % of C11 (corner-4) although the true symmetry is tetragonal.
+K is unaffected (solved with imposed symmetry). Task 6 removes these artifacts by symmetry
+projection (max change of the latent logs: K 3e-4, k_eff 0.028, C 0.029, localization 0.005).
+
+## Task 6 — Closure surrogates  ✅
+
+**Built**
+- `src/voxlat/surrogates/` (all numpy/scipy/scikit-learn; **no torch needed**):
+  - `tensors.py` — Log-Euclidean maps (batched `sym_logm` / `sym_expm`), Daleckii-Krein derivative of
+    exp, Voigt <-> Mandel, Mandel rotation (checked against `elasticity.rotate_stiffness`).
+  - `symmetry.py` — symmetry classes of theta and their Reynolds projectors (2nd-rank, stiffness,
+    load cases).
+  - `targets.py` — closure table <-> 40 latent targets <-> derived quantities with delta-method std.
+  - `gp.py` — ARD Matérn-5/2 GP per target (sklearn hyper-parameter fit, numpy prediction).
+  - `nn.py` — minimal numpy NN layers (Dense, periodic Conv3d, pooling, space-to-depth, AdamW,
+    Gaussian NLL), every backward pass gradient-checked.
+  - `ensemble.py` — 5-member heteroscedastic MLP deep ensemble.
+  - `cnn.py` — 3D CNN ensemble on 32³ voxels for K* and E*.
+  - `model.py` — `ClosureModel` (GP or ensemble; the API for Tasks 9/11), `CNNClosureModel`, save/load.
+  - `evaluation.py` — 5-fold CV, extrapolation splits, metrics, recalibration, parity/calibration plots.
+- Scripts: `scripts/task6_train_surrogates.py` (production models -> `models/`),
+  `scripts/task6_evaluate.py` (CV + splits -> tables, figures), `scripts/task6_cnn_experiment.py` (6c).
+- `models/closure_gp.npz` (100 kB), `models/closure_ensemble.npz` (0.5 MB), `models/closure_cnn.npz`
+  — plain `.npz` + JSON metadata (no pickle; independent of the scikit-learn version; the GP
+  Cholesky factors are recomputed on load).
+- Tests: `tests/test_surrogates.py`. README section "Closure surrogates (Task 6)".
+
+**Decisions**
+1. **Why numpy instead of torch.** PyPI is blocked in the build sandbox (no torch), and the models are
+   tiny: the CNN has ~45 k parameters and trains in ~4 min per member on one core; numpy keeps it
+   runnable everywhere and makes the weights plain arrays. The `ml` extra (torch) is still needed later
+   by BoTorch (Task 11).
+2. **Targets (40 latent, all smooth in theta):** matrix log of K/L² (6) and of k_eff/k_s (6), matrix log of
+   the Mandel stiffness C/E_s (21), log a_sf L (1), log p99 localization of the six unit stresses (6).
+   The eigenvalues of log(K/L²) **are** the log principal values of K, and its eigenvectors the
+   principal axes ([111] for blends, Tasks 2-4) — so the device model gets the full tensor, not just
+   three numbers. exp of any symmetric prediction is SPD: positivity and tensor symmetry hold by
+   construction. The **max** localization is not modelled (voxel-corner singularity, Task 3).
+3. **Material symmetry is imposed exactly** (projection of the latent logs; `symmetry.py`):
+
+   | class | where | rows | independent K / C / load cases |
+   |---|---|---|---|
+   | cubic (432) | w in {0,1}, a_z = 1 | 14 | 1 / 3 / 2 |
+   | tetragonal (422 about z) | w in {0,1}, a_z != 1 | 16 | 2 / 6 / 4 |
+   | trigonal (3-fold about [111]) | 0 < w < 1, a_z = 1 | 10 | 2 / 7 / 2 |
+   | triclinic | 0 < w < 1, a_z != 1 | 250 | 6 / 21 / 6 |
+
+   Verified on the Task 5 data (trigonal C shows exactly the 7-constant cyclic pattern) and against
+   the Task 2 solver in a test. Stretched blends have *no* symmetry: |k_xx - k_yy| reaches 9 % of k.
+4. **L is analytic:** K = (K/L²) L², a_sf = (a_sf L)/L; k_eff, C, localization are scale-free.
+5. **Inputs:** u = (w, log rho*, log a_z) scaled to [0, 1]³ (power laws become linear).
+6. **GP:** least-squares linear trend + ARD Matérn-5/2 + white noise per target, 2 optimizer restarts.
+   Fitted w length scales are short (~0.09) for k_eff and C: the blend pinch-neck transition (Tasks 1-4)
+   sets a single stationary length scale.
+7. **Deep ensemble:** 5 x MLP 3-64-64-64-80 (SiLU), MSE warm-up (30 %) then Gaussian NLL, AdamW, cosine
+   schedule, 3000 full-batch epochs; uniform Gaussian mixture.
+8. **Uncertainty:** latent std -> derived std by the exact first-order delta method (checked against
+   Monte Carlo within ~2 %; sorted eigenvalues near a crossing are conservative). Raw std's are too
+   small (raw CV 95 % coverage 74-92 %; only the ensemble's a_sf reaches 98 %), so the production models carry a **CV recalibration**: per latent
+   target, multiplier = 95th percentile of the out-of-fold |z| / 1.96 (median by group — GP: K 1.02,
+   k_eff 1.64, C 1.68, a_sf 1.26, loc 1.68; ensemble: K 1.09, k_eff 1.74, C 1.62, a_sf 1.00, loc 1.58).
+   In the evaluation it is applied **cross-fitted** (fold f scaled with the other folds' multipliers).
+   Errors are heavy-tailed (pinch-neck blends), so one multiplier cannot fix the whole calibration
+   curve: intervals are conservative for most designs and still too narrow in the neck region.
+
+**Public API (`voxlat.surrogates`)**
+```python
+cm = ClosureModel.load("ensemble")             # or "gp"; models/closure_<backend>.npz
+out = cm.predict(theta, L)                     # theta: (3,) | (N,3) | dict | TPMSParams; L [m] scalar or (N,)
+#   -> {name: (mean, std)} SI:  K (N,3,3) m^2, K_principal (N,3), K_star, k_eff (N,3,3) W/mK,
+#      C_eff (N,6,6) Pa (Voigt, engineering shear), E (N,3) Pa, E_star, a_sf 1/m,
+#      loc_<case>_p99 (6 cases), porosity (exact)
+cm.predict(theta, L, return_std=False)         # means only (~0.12 s for 512 points)
+cm.predict(theta, L, check_bounds="raise")     # default "warn" outside the training box
+cm.predict_dimensionless(theta)                # K/L^2, k/k_s, C/E_s, ... (targets.QUANTITY_INFO names)
+cm.predict_latent(theta) -> (mu, sd, classes); cm.symmetry_class(theta)
+ClosureModel.fit(df, "gp"|"ensemble", recalibrate=True, **backend_kw); cm.save(path)
+cnn = CNNClosureModel.load(); cnn.predict(theta, L) -> {"K_star", "E_star"}; cnn.predict_voxels(vox32, a_z, L)
+load_training_table(path=None)                 # data/closures.parquet (csv fallback), status == ok
+symmetry_class(w, a_z); rotation_group(name); projector_sym3/sym6/cases(name); independent_components(name)
+latent_from_table(df) -> (Y, classes); derived_quantities(mu, sd, classes); tensors_from_latent(mu, classes)
+GaussianProcessSurrogate, MLPEnsemble, CNNEnsemble, cnn_voxels(theta)
+evaluation: kfold_indices, extrapolation_split, sparse_blend_split, cross_validate, predict_split,
+            latent_cv, std_scale_from_oof, summarize, summarize_groups, plot_parity, plot_calibration
+```
+
+**Accuracy** (`results/task6_metrics_groups.csv`, per quantity `results/task6_metrics.csv`; every
+prediction in `results/task6_predictions.csv.gz`). R² on log values for positive quantities; err =
+MAPE, or NMAEᴺ = MAE / mean diagonal for signed components (off-diagonals, whose R² is not meaningful
+because most are ~0); cov95 = coverage of the recalibrated 95 % interval (raw in brackets).
+
+*5-fold CV (290 rows):*
+
+| quantity | GP R² | GP err | GP cov95 | ens R² | ens err | ens cov95 |
+|---|---|---|---|---|---|---|
+| K principal values | 0.999 | 0.9 % | 93 % (92) | 0.999 | 0.9 % | 91 % (89) |
+| K* = tr K/3 | 0.999 | 0.7 % | 91 % (89) | 0.999 | 0.7 % | 86 % (85) |
+| k_eff diagonal | 0.995 | 1.9 % | 96 % (91) | 0.995 | 1.5 % | 95 % (89) |
+| k_eff off-diagonal | 0.936 | 0.66 %ᴺ | 97 % (90) | 0.952 | 0.46 %ᴺ | 96 % (86) |
+| C normal (C11, C22, C33) | 0.985 | 6.0 % | 93 % (89) | 0.988 | 4.3 % | 94 % (86) |
+| C coupling (C12, C13, C23) | 0.980 | 2.18 %ᴺ | 92 % (86) | 0.992 | 1.01 %ᴺ | 93 % (86) |
+| C shear (C44, C55, C66) | 0.982 | 6.4 % | 96 % (92) | 0.990 | 3.2 % | 97 % (88) |
+| C off-class (12 others) | 0.752 | 0.45 %ᴺ | 97 % (92) | 0.891 | 0.25 %ᴺ | 96 % (88) |
+| E* = mean(E_x, E_y, E_z) | 0.988 | 4.6 % | 92 % (88) | 0.988 | 3.9 % | 89 % (74) |
+| E_z | 0.988 | 5.8 % | 96 % (91) | 0.989 | 4.1 % | 93 % (84) |
+| a_sf L | 0.999 | 0.3 % | 95 % (92) | 0.999 | 0.2 % | 98 % (98) |
+| loc p99, uniaxial | 0.988 | 4.3 % | 94 % (89) | 0.990 | 2.9 % | 94 % (88) |
+| loc p99, shear | 0.983 | 5.0 % | 94 % (89) | 0.987 | 3.5 % | 93 % (86) |
+
+Errors concentrate in the **pinch-neck region** (0.3 < w < 0.7, rho* < 0.4; 72 rows). CV MAPE, ensemble / GP:
+
+| quantity | rest (218 rows) | neck (72 rows) |
+|---|---|---|
+| K* | 0.6 / 0.6 % | 1.3 / 1.2 % |
+| k*/k_s | 0.6 / 1.1 % | 3.8 / 3.9 % |
+| E* | 1.4 / 2.2 % (median 0.5 / 1.1 %) | 11.6 / 11.8 % |
+| C44 | 1.4 / 4.3 % | 8.2 / 12.4 % |
+| loc p99 uniaxial z | 1.5 / 2.8 % | 8.3 / 10.0 % |
+| a_sf L | 0.2 / 0.2 % | 0.4 / 0.4 % |
+
+Held-out pure G/D rows (30): E* 1.3 % (ensemble) / 1.8 % (GP), K* 0.7 / 0.9 %, k* 0.7 / 1.0 %.
+
+*Extrapolation split "band": trained on w < 0.25 or w > 0.75 (158 rows), tested on the held-out blends
+0.25 <= w <= 0.75 (132 rows):*
+
+| quantity | GP R² | GP err | GP cov95 | ens R² | ens err | ens cov95 |
+|---|---|---|---|---|---|---|
+| K principal values | 0.974 | 6.4 % | 40 % (38) | 0.979 | 5.4 % | 85 % (85) |
+| K* = tr K/3 | 0.979 | 5.6 % | 27 % (23) | 0.982 | 4.8 % | 80 % (80) |
+| k_eff diagonal | 0.920 | 11.5 % | 84 % (72) | 0.916 | 12.4 % | 82 % (68) |
+| k_eff off-diagonal | -0.678 | 5.27 %ᴺ | 69 % (55) | 0.033 | 3.77 %ᴺ | 60 % (32) |
+| C normal (C11, C22, C33) | 0.770 | 59.2 % | 70 % (64) | 0.737 | 66.8 % | 72 % (53) |
+| C coupling (C12, C13, C23) | 0.836 | 9.21 %ᴺ | 64 % (56) | 0.840 | 9.33 %ᴺ | 67 % (48) |
+| C shear (C44, C55, C66) | 0.838 | 33.2 % | 82 % (75) | 0.817 | 36.9 % | 74 % (56) |
+| C off-class (12 others) | -0.444 | 2.09 %ᴺ | 65 % (52) | 0.145 | 1.41 %ᴺ | 71 % (54) |
+| E* = mean(E_x, E_y, E_z) | 0.822 | 43.1 % | 67 % (61) | 0.794 | 49.3 % | 62 % (39) |
+| E_z | 0.837 | 42.1 % | 77 % (70) | 0.805 | 49.9 % | 76 % (57) |
+| a_sf L | 0.945 | 2.3 % | 49 % (45) | 0.937 | 2.4 % | 86 % (86) |
+| loc p99, uniaxial | 0.880 | 14.7 % | 72 % (62) | 0.856 | 16.8 % | 74 % (61) |
+| loc p99, shear | 0.867 | 16.5 % | 72 % (59) | 0.848 | 17.8 % | 65 % (48) |
+
+*Split "sparse": trained on all pure G/D + a random 25 % of the blends (95 rows), tested on the other
+75 % of the blends (195 rows):*
+
+| quantity | GP R² | GP err | GP cov95 | ens R² | ens err | ens cov95 |
+|---|---|---|---|---|---|---|
+| K principal values | 0.996 | 2.0 % | 90 % (89) | 0.994 | 2.4 % | 84 % (83) |
+| K* = tr K/3 | 0.997 | 1.5 % | 83 % (82) | 0.995 | 2.1 % | 76 % (76) |
+| k_eff diagonal | 0.981 | 4.0 % | 95 % (90) | 0.982 | 3.4 % | 91 % (82) |
+| k_eff off-diagonal | 0.737 | 1.46 %ᴺ | 97 % (92) | 0.851 | 1.02 %ᴺ | 89 % (72) |
+| C normal (C11, C22, C33) | 0.947 | 11.8 % | 91 % (85) | 0.947 | 11.8 % | 87 % (77) |
+| C coupling (C12, C13, C23) | 0.868 | 5.85 %ᴺ | 85 % (73) | 0.958 | 3.10 %ᴺ | 78 % (68) |
+| C shear (C44, C55, C66) | 0.942 | 9.9 % | 96 % (92) | 0.948 | 9.0 % | 93 % (81) |
+| C off-class (12 others) | -2.400 | 1.62 %ᴺ | 98 % (91) | 0.585 | 0.61 %ᴺ | 92 % (79) |
+| E* = mean(E_x, E_y, E_z) | 0.964 | 9.5 % | 89 % (84) | 0.959 | 9.7 % | 85 % (70) |
+| E_z | 0.960 | 11.1 % | 93 % (88) | 0.965 | 10.0 % | 87 % (78) |
+| a_sf L | 0.996 | 0.5 % | 87 % (82) | 0.994 | 0.6 % | 87 % (87) |
+| loc p99, uniaxial | 0.977 | 6.6 % | 96 % (90) | 0.975 | 6.0 % | 90 % (79) |
+| loc p99, shear | 0.974 | 7.0 % | 96 % (92) | 0.973 | 6.3 % | 90 % (80) |
+
+**6c — Does geometry-based learning extrapolate better?** (`results/task6_cnn_metrics.csv`, figure
+`task6_cnn_extrapolation.png`). Same targets (log K*, log E*) and rows for all three; GP/ensemble see
+theta, the CNN sees the 32³ voxel cell + a_z; raw (not recalibrated) intervals; CNN = 3 members,
+120 epochs.
+
+| split | target | GP MAPE / cov95 | ensemble MAPE / cov95 | CNN MAPE / cov95 |
+|---|---|---|---|---|
+| cv5 | K_star | 0.7 % / 96 % | 0.8 % / 87 % | 1.3 % / 98 % |
+| cv5 | E_star | 5.6 % / 91 % | 5.2 % / 85 % | 5.8 % / 95 % |
+| sparse | K_star | 1.5 % / 88 % | 1.8 % / 81 % | 2.2 % / 93 % |
+| sparse | E_star | 9.4 % / 89 % | 11.1 % / 70 % | 7.3 % / 92 % |
+| band | K_star | 5.7 % / 35 % | 5.5 % / 47 % | 6.7 % / 45 % |
+| band | E_star | 45.3 % / 66 % | 53.6 % / 33 % | 107.2 % / 20 % |
+
+- **No, not across a gap of unseen topology.** On the band split the CNN is *worse* than the parameter
+  models for E* (107 % vs 45-54 % MAPE) and slightly worse for K*. Blends with 0.375 < w < 0.625 lose
+  72-79 % of the stiffness a log-linear G-D interpolation predicts at rho* <= 0.3 and ~50 % at
+  rho* = 0.3-0.4 (pinch necks, Tasks 1-3); no training
+  blend outside the band shows this (E*/interpolation >= 0.91), so the mechanism is absent from the
+  training data and a voxel model has no basis to predict it — it meets unfamiliar neck features and
+  over-predicts more than the smooth parameter models do. Its E* error even *grows* toward the band
+  edge (up to ~500 % at w ~ 0.72): at rho* ~ 0.2-0.25, E* drops 3-8x between w ~ 0.76 (train) and
+  w ~ 0.72 (test) while the controlling necks are 0.03-0.09 L thick = 1-3 voxels at 32³, i.e. the
+  feature that sets the stiffness is at the input resolution and the two cells look almost the same
+  to the network. Global max-pooling (a neck detector) did not help (95 % vs 110 %, 2-member trial);
+  a 64³ input (8x cost) is the obvious next experiment.
+- **Yes, when the topology change is sampled sparsely.** With 25 % of the blends in training (sparse)
+  the CNN is the best E* model (7.3 % vs 9.4 % GP, 11.1 % ensemble) with the best-calibrated raw
+  intervals (92 % vs 89 / 70 %); for K* the parameter models stay ahead (1.5-1.8 % vs 2.2 %).
+- **Dense data (cv5): no advantage.** With 232 training rows the CNN is on par for E* (5.8 % vs
+  5.2-5.6 %) and behind for K* (1.3 % vs 0.7-0.8 %), but again the best calibrated (95-98 % raw
+  coverage vs 85-96 %). Geometry helps most when parameter-space data are scarce.
+- Practical consequence: Task 9/11 use the parameter-based `ClosureModel` (full tensors, cheap); the CNN
+  stays a research result (and a tool for geometries outside the (w, rho*, a_z) family).
+- None of the models may be trusted in the pinch-neck region without examples there; the Task 5 table
+  does sample it, so the production models do see it (CV errors above).
+
+**Timings** (build sandbox, 2 cores; parallel jobs running, so upper bounds)
+| Step | Time |
+|---|---|
+| GP fit, 40 targets (2 jobs) | ~50 s; production with 5-fold recalibration ~5 min |
+| Ensemble fit, 5 members (2 jobs) | ~20 s; with recalibration ~2 min |
+| `scripts/task6_evaluate.py` | ~6 min |
+| CNN member, 290 rows x 120 epochs | ~6 min/member (1 core); production ensemble of 3 (2 jobs): 16.5 min |
+| `predict`, 512 points, with std / mean only | GP 0.69 / 0.12 s; ensemble 0.33 / 0.14 s |
+| CNN `predict`, 1 theta (voxelize + 16-fold TTA x 3 members) | ~1 s |
+
+**Recommended for Task 9 / 11:** `ClosureModel.load("ensemble")` — best held-out accuracy for k_eff, C,
+E* and localization on pure *and* blended cells, equal for K and a_sf, fastest with std. Cross-check
+with `"gp"` (better calibrated for K: 91 vs 86 % coverage). Re-check final optimized designs with the
+direct solvers when they sit in the neck region.
+
+**Open issues / notes for later tasks**
+1. **Pinch-neck region (0.3 < w < 0.7, rho* < 0.4):** stiffness/localization surrogate errors ~10 %
+   (vs ~1-2 % elsewhere) and intervals too narrow there. Task 11 options: forbid the region (it is
+   structurally poor anyway, Task 3), add Task 5 samples there (densify w in 0.3-0.7, rho* 0.2-0.4 and
+   retrain — the scripts are ready), or verify final designs directly.
+2. Ensemble K* coverage is 86 % in CV (K multipliers ~1.1): fine for design, not for K uncertainty
+   studies — use the GP for those.
+3. Off-diagonal / off-class tensor components (blends) are small (NMAE 0.3-0.7 % of the diagonal);
+   their R² is low because most values are ~0 — Task 9 rotates full tensors, so these errors are
+   negligible next to the diagonal ones.
+4. k_eff/k_s is valid for the Task 5 contrast k_f/k_s = 1/325 only; C scales exactly with E_s at
+   nu = 0.33. Retrain if the material changes.
+5. `ClosureModel` warns outside the training box (rho* 0.2-0.5, a_z 0.6875-1.5); the optimizer
+   bounds (plan §2) are inside it.
+6. Task 5 STATUS notes were missing from the repo (see Task 5 above).
+7. Workspace: PyPI blocked (no pyarrow, no torch); the parquet table was read with a throw-away
+   pure-Python reader in the sandbox only (not shipped). Python 3.13, numpy 2.5.3, scipy 1.18.1,
+   scikit-learn 1.9.1.
+8. Citations to verify: Lakshminarayanan, Pritzel & Blundell 2017 (NeurIPS, deep ensembles); Arsigny,
+   Fillard, Pennec & Ayache 2006 (Magn. Reson. Med. 56:411, Log-Euclidean metric); Rasmussen &
+   Williams 2006 (*Gaussian Processes for Machine Learning*, Matérn/ARD); Daleckii & Krein 1965 /
+   Higham 2008 (*Functions of Matrices*) for the Fréchet derivative; Kuleshov, Fenner & Ermon 2018
+   (ICML, recalibration of regression uncertainty); Loshchilov & Hutter 2019 (AdamW).
+
+**Figures** (`results/figures/`): `task6_parity_cv.png` (5-fold CV parity, GP and ensemble, recalibrated
+95 % bars), `task6_parity_band.png` (band split), `task6_calibration.png` (observed vs nominal coverage,
+raw and recalibrated, cv5 / band / sparse), `task6_cnn_extrapolation.png` (CNN vs GP vs ensemble, parity
+per split + error vs w).
+
+**Tests**: 336 passed + 4 skipped (pyamg x3, pyarrow x1) in 32.5 min — Tasks 0-6 incl. slow, run alongside
+the CNN experiment (`results/task6_pytest_log.txt`). Task 6 alone (`tests/test_surrogates.py`): 46 passed
+(1 `slow`: GP hold-out accuracy on the real table); `pytest -m "not slow" tests/test_surrogates.py` ~1 min.
+Covered: vectorization / logm / expm / Fréchet derivative vs finite differences (incl. repeated
+eigenvalues); Mandel rotation = `elasticity.rotate_stiffness`; group closure, projector rank and
+idempotence per class, class structure of projected tensors (trigonal 7-constant pattern); declared
+symmetry is physical (Task 2 solver: G cubic, w = 0.5 trigonal and *not* cubic, stretched G tetragonal);
+latent round trip; delta-method std vs Monte Carlo; gradient checks of every NN layer and the NLL;
+periodic-conv translation equivariance; Adam; GP = scikit-learn prediction, ARD switches off an
+irrelevant input; ensemble uncertainty grows away from data; CNN exact shift invariance and exact
+TTA invariance; `ClosureModel` shapes, SI and L scaling, SPD, exact symmetry classes, save/load,
+bounds, recalibration; metrics and splits; real table (symmetry-projection size, hold-out accuracy);
+trained models reproduce the Task 2-4 tables (rho* = 0.35: K*, k*, E* within 3 / 3 / 6 %).
+Tests needing the Task 5 table read `data/closures.parquet` (pyarrow) or `$VOXLAT_CLOSURE_TABLE`; tests of
+the trained models skip if `models/` is empty.
 
 ## Task 7 — Finite-gap study (RQ1)
 _not started_

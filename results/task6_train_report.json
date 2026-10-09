@@ -1,0 +1,102 @@
+{
+  "gp": {
+    "train_time_s": 660.0703424489993,
+    "path": "/home/claude/zain4366/voxlat/models/closure_gp.npz",
+    "sanity": [
+      {
+        "quantity": "K_mean",
+        "train_R2": 0.9999201164064419,
+        "train_MAPE": 0.002492458733316372
+      },
+      {
+        "quantity": "keff_mean",
+        "train_R2": 0.9999950967782547,
+        "train_MAPE": 0.0005500522611415016
+      },
+      {
+        "quantity": "E_axial",
+        "train_R2": 0.999999384249631,
+        "train_MAPE": 0.00042303321901497956
+      },
+      {
+        "quantity": "C44",
+        "train_R2": 0.999999945340193,
+        "train_MAPE": 3.401134043399563e-05
+      },
+      {
+        "quantity": "a_sf_L",
+        "train_R2": 0.9999614000802911,
+        "train_MAPE": 0.00045633759783425006
+      },
+      {
+        "quantity": "loc_uniaxial_z_p99",
+        "train_R2": 0.998880195764765,
+        "train_MAPE": 0.014319995929435043
+      }
+    ],
+    "recalibration": {
+      "cv_folds": 5,
+      "median": 1.648068728039434,
+      "max": 2.1344192453428863,
+      "by_group": {
+        "K": 1.0199917393949436,
+        "keff": 1.6393291210614547,
+        "C": 1.6791718183011866,
+        "asf": 1.2649379086020185,
+        "loc": 1.676698461333769
+      }
+    }
+  },
+  "ensemble": {
+    "train_time_s": 183.27171227300005,
+    "path": "/home/claude/zain4366/voxlat/models/closure_ensemble.npz",
+    "sanity": [
+      {
+        "quantity": "K_mean",
+        "train_R2": 0.9998814301407892,
+        "train_MAPE": 0.0029331702321553493
+      },
+      {
+        "quantity": "keff_mean",
+        "train_R2": 0.9997766612049256,
+        "train_MAPE": 0.003542092648619708
+      },
+      {
+        "quantity": "E_axial",
+        "train_R2": 0.9996865285463395,
+        "train_MAPE": 0.008264446245604398
+      },
+      {
+        "quantity": "C44",
+        "train_R2": 0.9996375556537078,
+        "train_MAPE": 0.00658842849347064
+      },
+      {
+        "quantity": "a_sf_L",
+        "train_R2": 0.9997955605208538,
+        "train_MAPE": 0.0010826147929957415
+      },
+      {
+        "quantity": "loc_uniaxial_z_p99",
+        "train_R2": 0.9993867972978998,
+        "train_MAPE": 0.008072948391126966
+      }
+    ],
+    "recalibration": {
+      "cv_folds": 5,
+      "median": 1.6034465591766307,
+      "max": 2.0704588150757326,
+      "by_group": {
+        "K": 1.0904072655268173,
+        "keff": 1.7364942401646632,
+        "C": 1.623439692197559,
+        "asf": 1.0,
+        "loc": 1.5793351414087564
+      }
+    }
+  },
+  "cnn": {
+    "train_time_s": 986.772234299,
+    "path": "/home/claude/zain4366/voxlat/models/closure_cnn.npz"
+  }
+}
