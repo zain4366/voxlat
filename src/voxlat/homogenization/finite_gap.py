@@ -838,10 +838,11 @@ def _features(w: Any, rho: Any, a_z: Any) -> np.ndarray:
     [1, r, w, b, r w, r b, s] with r = (rho* - 0.35)/0.1, b = 4 w (1 - w)
     (bump: 0 for pure G/D, 1 at w = 0.5), s = log(a_z).
     """
-    w = np.asarray(w, dtype=float)
-    r = (np.asarray(rho, dtype=float) - 0.35) / 0.1
+    w, rho, a_z = np.broadcast_arrays(np.asarray(w, dtype=float), np.asarray(rho, dtype=float),
+                                      np.asarray(a_z, dtype=float))  # mixed scalars / arrays (Task 9)
+    r = (rho - 0.35) / 0.1
     b = 4.0 * w * (1.0 - w)
-    s = np.log(np.asarray(a_z, dtype=float))
+    s = np.log(a_z)
     one = np.ones_like(w)
     return np.stack([one, r, w, b, r * w, r * b, s], axis=-1)
 

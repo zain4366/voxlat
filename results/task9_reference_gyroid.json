@@ -1,0 +1,97 @@
+{
+  "thermal_resistance": 0.02436891174130337,
+  "T_wall_max": 341.91406204080357,
+  "T_wall_max_lattice": 336.09241377064257,
+  "T_wall_max_s": 0.23467365269243962,
+  "T_wall_max_z": 0.00125,
+  "T_wall_mean": 328.9932750476984,
+  "T_in": 323.15,
+  "T_out": 327.4230299667002,
+  "heat_input": 769.9999999999999,
+  "delta_p": 1833.244790344269,
+  "pump_power": 0.3055407983907115,
+  "hydraulic_power": 0.09166223951721345,
+  "flow_rate": 5e-05,
+  "mass": 0.3435312079471936,
+  "mass_lattice": 0.12282057956465091,
+  "mass_walls": 0.22071062838254268,
+  "coolant_volume": 9.442897455005147e-05,
+  "min_structural_margin": 12.693400575674648,
+  "lattice_margin": 21.04704985249263,
+  "outer_wall_margin": 12.693400575674648,
+  "structural": {
+    "sigma_vm_max": 3801007.7688168488,
+    "argmin_s": 0.00812229730878534,
+    "argmin_z": 0.00125,
+    "contrib_pressure": 3053932.7749192356,
+    "contrib_torque": 293066.3591621889,
+    "contrib_thrust": 454008.6347354243,
+    "tau_rs_max": 23950.032308691956,
+    "tau_rz_max": 37102.59171821529,
+    "sigma_rr_max": 199108.58603258058,
+    "pressure": 201833.24479034427,
+    "lattice_pressure_share_min": 0.9865004461450643,
+    "outer_wall_hoop": 106942.8562422244,
+    "outer_wall_slot_bending": 6302487.621269137,
+    "outer_wall_pore_bending": 151374.9335927582
+  },
+  "manufacturable": true,
+  "manufacturability": {
+    "within_bounds": true,
+    "bounds": {
+      "rho": true,
+      "w": true,
+      "L": true,
+      "a_z": true
+    },
+    "cell_size_ok": true,
+    "cell_size_ratio_min": 2.637636070485255,
+    "gradient_ok": true,
+    "gradient_max": 0.0,
+    "gradient_limit": 0.05,
+    "N_min": 1.5,
+    "finite_gap_valid": true,
+    "pinch_neck_area_fraction": 0.0,
+    "manufacturable": true
+  },
+  "mass_balance_error": 9.622294280808852e-15,
+  "max_cell_divergence": 9.9484964007299e-15,
+  "energy_balance_error": 8.051095144103536e-13,
+  "picard_iterations": 3,
+  "picard_converged": true,
+  "diagnostics": {
+    "flow_split": [
+      0.4999999999999923,
+      0.4999999999999916
+    ],
+    "reynolds_range": [
+      195.12469806558371,
+      195.12469806564326
+    ],
+    "reynolds_median": 195.12469806561947,
+    "forchheimer_number_range": [
+      1.650458428162584,
+      1.6504584281630874
+    ],
+    "h_sf_mean": 4727.5318402150415,
+    "U_eff_mean": 12475.690237786599,
+    "fin_efficiency_mean": 0.4463058386725965,
+    "heat_to_manifold_plenums": {
+      "inlet": 1.406991889185622,
+      "outlet": 1.3667759143877265
+    },
+    "manifold_htc": 179.5,
+    "finite_gap_factor_K_mean": 0.8224479431991126,
+    "grid": [
+      376,
+      20
+    ],
+    "timings": {
+      "closures": 0.016489800000272226,
+      "flow": 0.07286820000081207,
+      "heat": 0.12875999999960186,
+      "rest": 0.0024314000002050307
+    }
+  },
+  "wall_time": 0.22081180000168388
+}
