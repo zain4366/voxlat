@@ -16,7 +16,7 @@ Plan: project doc `claude/voxlat_task_plan.md`. Reference numbers: `configs/refe
 | 7 | Finite-gap study (RQ1) | **done** (2026-10-09, n = 32 in the sandbox; n = 48 overnight run optional) |
 | 8 | Literature closures (Nu, Forchheimer) | **done** (2026-10-10) |
 | 9 | Homogenized jacket device model | **done** (2026-10-10) |
-| 10 | Baselines B1–B3 | not started |
+| 10 | Baselines B1–B3 | **done** (2026-10-10) |
 | 11 | Multi-objective optimization (RQ2, RQ3) | not started |
 | 12 | PicoGK geometry export | not started |
 | 13 | Reproducibility pass + figure set | not started |
@@ -1523,8 +1523,142 @@ tests) 64 passed in 24 s; full suite `-m "not slow"` **408 passed + 4 skipped** 
 (`results/task9_pytest_log.txt`). The other 18 slow tests (Tasks 1–4, 6) were not re-run: Task 9 changes no solver
 code outside `finite_gap._features`.
 
-## Task 10 — Baselines B1–B3
-_not started_
+## Task 10 — Baselines B1–B3  ✅
+
+**Built**
+- `src/voxlat/device/baselines.py` — the baselines with the Task 9 interface: `evaluate(design, flow_rate=None,
+  return_fields=False) -> dict` returns every Task 9 top-level key (R, Δp, pump power, mass, margins,
+  manufacturability, balances, diagnostics, fields) plus `T_wall_max_active` / `R_active` (hottest point of the cooled
+  region, i.e. excluding the sleeve under the manifold slots) and `design` (JSON dict). Exported from `voxlat.device`
+  (`evaluate_baseline`, designs, `tune_b1/b2/b3`, `select_best`, `pareto_front`, `design_from_dict`).
+- `scripts/task10_baselines.py` (~2.5 min; `--quick` ~50 s), `tests/test_baselines.py` (32 tests, 7 s), README section.
+- Duct correlations: `rect_duct_fre` (exact Shah & London series), `rect_duct_nu_h1`, `helical_re_crit`,
+  `curved_duct_friction`, `coil_nusselt_laminar/turbulent`, `curved_duct_nusselt`, `developing_nusselt_mean`,
+  `rib_conductance` (fin with optional tip conductance), `DUCT_REFERENCES`.
+
+**Baseline definitions**
+| | Design variables | Model |
+|---|---|---|
+| **B1** helical channels | channel width w_c, rib thickness t_r, starts n (pitch P = n (w_c + t_r)); grid: N_pass = L_ax/(w_c + t_r) ∈ {3 … 40}, t_r ∈ {0.35 … 2} mm, n ∈ {1 … 40} ≤ N_pass, w_c ≥ 0.8 mm → **479 candidates** | new `ChannelJacketModel`, **end-ring manifolds** (inlet z = 0, outlet z = L_ax, assumed outside the heated length → no unfinned slot strips) |
+| **B1s** circumferential channels | same (n = 1), 75 candidates | same model, **the lattice's axial slots** (θ = 0/180°, 15 mm, same h_m plenum treatment) — the like-for-like manifold comparison asked for in Task 9 open issue 1 |
+| **B2** uniform gyroid | ρ* 0.20–0.50 (step 0.025) × L 2–6 mm (step 0.25) → 221 candidates, all manufacturable | Task 9 `JacketModel` |
+| **B3** density-graded gyroid | ρ*(s, z) = interp(ξ, 4 knots along each half path, mirror-symmetric) + amp_z ψ(z), ψ = q''(z)-shaped; **w = 0, L fixed at the B2 optimum** | Task 9; 64 Sobol + Nelder–Mead (218 evaluations), constraints as penalties |
+
+**Selection rule (identical for every family, `select_best`)**: min R at 3 L/min s.t. manufacturable, min structural
+margin ≥ 1 and **pump power ≤ 0.3055 W = the Task 9 reference design (uniform gyroid ρ* 0.35, L 4 mm)**. Each family's
+full candidate table and non-dominated (R, pump power, mass) set are saved for the Task 11 overlay.
+
+**B1 model (equations in the module docstring)**
+- Per channel (all identical, constant properties): D_h = 2 w_c h/(w_c + h); helix curvature radius R_c = r_m(1 + tan²α);
+  Δp = (f ℓ/D_h + K_inc) ρU²/2, K_inc = 1.25; manifolds ideal (as Task 9).
+- f: straight laminar rectangular (exact series) × Schmidt (1967) curvature factor; turbulent Schmidt; Re_crit = 2300[1 + 8.6(d/D)^0.45].
+- Nu (D_h): laminar max(VDI coil 3.66 + 0.08[1 + 0.8(d/D)^0.9] Re^m Pr^(1/3), Nu_H1(α)); turbulent Gnielinski coil
+  (ξ = 0.3164 Re^-0.25 + 0.03 (d/D)^0.5); transition linear in Re between Nu_lam(Re_crit) and Nu_turb(2.2e4) (Gnielinski 1986).
+  No thermal-entrance enhancement (hot spot is at the developed outlet; `nu_model="developing_mean"` = optimistic bound).
+- U_eff = [h_c w_c + √(2h_c k t_r) tanh(mh)]/(w_c + t_r): rib fin with **adiabatic tip at the outer wall — the same
+  adiabatic-outer-wall assumption as the lattice**; `outer_wall_fin=True` adds the outer wall as a tip fin. Sleeve
+  isothermal over one period (spreading efficiency reported: ≥ 0.997 for the selected designs).
+- Planform heat model on the Task 9 grid: coolant advected by the homogenized channel flux (helical: Q/P per unit axial
+  width, Q/C per unit arc; circumferential: ±Q/(2L_ax)), no transverse mixing, upwind; sleeve conduction k_s t_sl;
+  slots → plenums with h_m; T_wall = stator side, identical to Task 9.
+- Structure: torque → in-plane rib shear τ/f_r (Task 9 sandwich); thrust → rib bending 3V′h/t_r² + shear; coolant
+  pressure → rib tension (rib share of radial stiffness); σ_vm × **K_t = 2.5** at the rib roots (assumption); outer-wall
+  hoop / channel-span / slot bending. Mass: ribs ρ h f_r A + the same walls as Task 9.
+
+**Verification (`results/task10_verification.csv`, tests)**
+| Check | Result |
+|---|---|
+| helical, no sleeve conduction: T_f(z) vs exact marching T_in + C/(ρc_pQ)∫q dz | **3e-12 K**; T_w − T_f = q/U_eff to 2e-14 |
+| circumferential, fixed wall T: ε vs exact discrete upwind, 4 grids | 1e-13 (and → ε-NTU, 0.06 % at 0.625 mm) |
+| energy / mass balance, both layouts, 1 and 5 L/min | < 4e-12 / < 4e-16; T_out − T_in = Q/(ρc_pV) |
+| Δp vs hand calculation; rib fin with tip conductance vs FD fin | 2e-16; 0.2 % (FD error) |
+| rect. duct f Re (Shah & London: 56.91 square, 62.19 α = 0.5, 96 plates); Nu_H1 square 3.61; Re_crit vs `fluids` (6946.79) | exact to table precision |
+| uniform B2 wrapper = Task 9 `JacketModel`; flat B3 = uniform | 1e-12 |
+
+**Selected designs (3 L/min, cap 0.306 W)**
+| | Design | R [mK/W] | R_active | Δp [Pa] | pump [W] | mass [kg] | min margin | notes |
+|---|---|---|---|---|---|---|---|---|
+| B1 | w_c 1.75 mm, t_r 0.75 mm, **20 starts** (P = 50 mm, α = 6.1°, ℓ = 0.47 m) | **13.3** | 13.3 | 1720 | 0.287 | 0.333 | 9.2 | Re 281, De 38, laminar, Nu 11.6, h_c 1.72 kW/m²K, U_eff 7.1 kW/m²K, rib η 0.72 |
+| B1s | w_c 0.90 mm, t_r 0.35 mm (40 channels/path) | 25.7 | 18.3 | 1088 | 0.181 | 0.319 | 4.2 | Re 79, U_eff 10.8 kW/m²K; the family's candidates span ≤ 0.29 W and none above 0.18 W is better |
+| B2 | ρ* 0.35, L 4 mm (= the Task 9 reference) | 24.4 | 16.8 | 1833 | 0.306 | 0.344 | 12.7 | U_eff 12.5 kW/m²K |
+| B3 | ρ* path (inlet→outlet) 0.25, 0.23, 0.37, **0.50**; amp_z ≈ 0; L 4 mm | 22.7 | 15.0 | 1827 | 0.304 | 0.335 | 12.3 | densifies toward the outlet slot; grad ρ* L = 0.0074 |
+
+**Comparison table at 1 / 3 / 5 L/min** (`results/task10_comparison.csv`, `task10_flow_comparison.png`; designs fixed)
+| | R [mK/W] | R_active [mK/W] | pump power [W] | T_wall,max at 3 L/min |
+|---|---|---|---|---|
+| B1 | 25.9 / **13.3** / 10.1 | 25.9 / 13.3 / 10.1 | 0.027 / 0.287 / 0.90 | 60.2 °C |
+| B1s | 37.5 / 25.7 / 22.6 | 30.5 / 18.3 / 15.1 | 0.019 / 0.181 / 0.52 | 69.8 °C |
+| B2 | 38.1 / 24.4 / 20.7 | 30.8 / 16.8 / 13.0 | 0.020 / 0.306 / 1.20 | 68.8 °C |
+| B3 | 35.9 / 22.7 / 19.3 | 28.4 / 15.0 / 11.5 | 0.020 / 0.304 / 1.20 | 67.5 °C |
+Masses: B1 0.333, B1s 0.319, B2 0.344, B3 0.335 kg (walls 0.221 kg in all). All margins ≥ 4.2 at every flow rate.
+
+**Best R at equal pump power** (`results/task10_equal_pump_power.csv`; R / R_active in mK/W)
+| cap | B1 | B1s | B2 | B3 |
+|---|---|---|---|---|
+| 0.10 W | 18.4 / 18.4 | 28.9 / 21.7 | 28.1 / 20.8 | — (search centred on the 0.31 W cap) |
+| 0.25 W | 14.3 / 14.3 | 25.7 / 18.3 | 24.9 / 17.4 | 23.8 / 16.2 |
+| 0.50 W | 12.4 / 12.4 | 25.7 / 18.3 (saturates) | 23.2 / 15.6 | — |
+| 1.0 W | 10.3 / 10.3 | — | 21.6 / 13.9 | — |
+| 2.0 W | 9.9 / 9.9 | — | 20.7 / 12.9 | — |
+
+**Headline (for RQ2 and the Task 11 decision)**
+1. **Manifold topology dominates R.** The helical channel with end-ring manifolds beats every lattice with axial slots
+   by ~45 % in R at equal pump power (13.3 vs 24.4 mK/W), because the lattice's R is set by the unfinned sleeve under
+   the outlet slot (Task 9 issue 1). Even on the cooled region alone (R_active, which for the lattice still sits next to
+   the slot edge) B1 is 21 % better than B2 and 11 % better than B3.
+2. **Like-for-like manifolds: the lattice wins.** With the same slots, B1s is 5 % worse than B2 in R and 9 % worse in
+   R_active at lower pump power, and its family saturates (feasible candidates reach only 0.29 W, none better than the
+   0.18 W pick: many short parallel channels cannot turn more pressure drop into heat transfer).
+3. **Density-only grading helps modestly:** B3 is 7 % (R) / 11 % (R_active) better than B2 at equal pump power,
+   by densifying toward the outlet slot (ρ* hits the 0.50 bound there).
+4. **Decision needed before Task 11** (recommendation): add an end-ring (axial-flow) manifold option to the Task 9
+   lattice model so the lattice can be compared with B1 on equal manifold terms, or treat the manifold layout as a
+   design variable; otherwise RQ2 compares manifold topologies, not cooling structures. Report B1 and B1s either way.
+
+**Sensitivity of B1 / B1s** (`results/task10_sensitivity.csv`; change in R)
+| case | B1 | B1s |
+|---|---|---|
+| Nu without curvature (straight duct, fully developed) | **+49 %** | +2 % |
+| Nu developing-flow length mean (optimistic) | 0 (Dean term dominates) | 0 |
+| outer wall as fin | −2.5 % | −0.4 % |
+| K_inc = 0 | Δp −2.2 % | Δp −0.8 % |
+| K_t 1.5 / 4 | margin 15.4 / 5.8 | 7.1 / 2.7 |
+| h_m = 1000 / 5000 W/m²K | 0 (no slots) | −13 % / −42 % (as the lattice in Task 9) |
+B1's advantage rests on the Dean-flow enhancement (VDI coil Nu 11.6 vs straight 5.0 at De 38); the coil correlations
+are for circular tubes and are applied to a 1.75 × 6 mm rectangle with D_h (assumption to state in the paper).
+
+**Runtime**: B1 0.05 s per evaluation (helical and circumferential); B2 0.2 s; B3 0.35 s.
+
+**Open issues / notes**
+1. Manifold decision above (supersedes Task 9 open issue 1 as the top item for Task 11).
+2. Correlation caveats: Schmidt laminar/turbulent friction branches jump by up to 23 % at Re_crit for d/D = 0.01
+   (5 % at 0.03; selected designs are laminar, Re ≤ 470 at 5 L/min, far below Re_crit ≈ 5500). Transition
+   interpolation of Gnielinski (1986) implemented from the VDI description — **verify against VDI Heat Atlas G3**.
+   K_inc = 1.25 is the circular-duct value.
+3. B1 ribs as thin as 0.35 mm × 6 mm tall are allowed (same min-wall limit as the lattice); the selected B1 uses
+   0.75 mm, B1s uses 0.35 mm. Printability of tall thin ribs and of the channel roof (bridge w_c) is not checked.
+4. Ring manifolds of B1 are assumed outside the 50 mm heated length (no axial space charged to B1).
+5. B3's knot at the outlet edge sits on the ρ* = 0.50 bound; Task 11 (with w and L free) should improve on it.
+6. B2 at the cap coincides with the Task 9 reference design (grid point ρ* 0.35, L 4 mm).
+7. Workspace: PyPI blocked (no pyamg, pyarrow, torch); numpy 2.5.3, scipy 1.18.1, Python 3.13.
+
+**References** (Task 10 additions)
+- Shah R.K., London A.L. (1978). *Laminar Flow Forced Convection in Ducts*. Adv. Heat Transfer Suppl. 1, Academic Press.
+- Schmidt E.F. (1967). Wärmeübergang und Druckverlust in Rohrschlangen. *Chem. Ing. Tech.* 39(13), 781–789.
+- Gnielinski V. (1986). Heat transfer and pressure drop in helically coiled tubes. *Proc. 8th Int. Heat Transfer Conf.*,
+  Vol. 6, 2847–2854, Hemisphere; VDI Heat Atlas (2010), chapter G3/Gc.
+- Schlünder E.U. (ed.) (1983). *Heat Exchanger Design Handbook*. Hemisphere (Schmidt correlations as defaults).
+- Baehr H.D., Stephan K. (2011). *Heat and Mass Transfer*, 3rd ed., Springer.
+- Correlation forms cross-checked against the open-source `fluids` / `ht` libraries (C. Bell) and the Modelica
+  Fluid.Dissipation documentation (VDI laminar/turbulent coil forms).
+
+**Figures** (`results/figures/`): `task10_temperature_maps.png` (stator-side sleeve temperature of B1, B1s, B2, B3 at
+3 L/min on one colour scale, hottest point marked), `task10_fronts.png` (R and R_active vs pump power: candidates,
+fronts, selected designs, reference), `task10_flow_comparison.png` (R, R_active, pump power at 1/3/5 L/min).
+Data: `results/task10_*.csv`, `results/baselines/{B1,B1s,B2,B3}.json`, `results/task10_pytest_log.txt`.
+
+**Tests**: `tests/test_baselines.py` 32 passed in 7 s; full suite `-m "not slow"` **440 passed + 4 skipped**
+(pyarrow ×2, pyamg ×2) in 2.3 min. Task 10 changes no existing solver code (only adds exports to `voxlat.device`).
 
 ## Task 11 — Multi-objective optimization
 _not started_

@@ -251,6 +251,28 @@ out = model.evaluate(rho_field, w_field, L_field, a_z=1.0, flow_rate=5e-5, retur
 python scripts/task9_jacket_model.py     # verification, grid study, flow sweep, sensitivity, figures (~20 s)
 ```
 
+## Baselines B1-B3 (Task 10)
+
+Same `evaluate()` outputs as Task 9 for every baseline, plus `R_active` (hottest point of the cooled region,
+excluding the sleeve under the manifold slots):
+
+- **B1** helical rectangular-channel jacket in the 6 mm gap (end-ring manifolds), laminar/transitional/turbulent
+  curved-duct correlations (Shah & London, Schmidt, Gnielinski/VDI); **B1s** the same channels running
+  circumferentially between the lattice's manifold slots (like-for-like manifold treatment).
+- **B2** best uniform gyroid (ρ*, L); **B3** density-only graded gyroid (w = 0, L fixed).
+
+```python
+from voxlat.device import ChannelDesign, UniformLatticeDesign, GradedDensityDesign, evaluate_baseline
+out = evaluate_baseline(ChannelDesign(channel_width=1.75e-3, rib_thickness=0.75e-3, n_starts=20))   # B1, 3 L/min
+out = evaluate_baseline(GradedDensityDesign((0.25, 0.23, 0.37, 0.50), 0.0, 4e-3), flow_rate=5 / 6e4)
+```
+
+```powershell
+python scripts/task10_baselines.py           # tuning, verification, 1/3/5 L/min table, figures (~3 min)
+python scripts/task10_baselines.py --quick   # coarse grids (~1 min)
+```
+Selected designs are stored in `results/baselines/*.json` (`design_from_dict(json["design"])` rebuilds them).
+
 ## Conventions
 
 - SI units inside the code; unit cells on normalized coordinates [0,1)³ scaled by cell size L.

@@ -24,6 +24,20 @@ from voxlat.device.jacket2d import (
     ntu_reference,
     uniform_flow_reference,
 )
+from voxlat.device.baselines import (
+    ChannelDesign,
+    ChannelJacketModel,
+    ChannelOptions,
+    GradedDensityDesign,
+    UniformLatticeDesign,
+    design_from_dict,
+    pareto_front,
+    select_best,
+    tune_b1,
+    tune_b2,
+    tune_b3,
+)
+from voxlat.device.baselines import evaluate as evaluate_baseline
 
 __all__ = [
     "JacketFields",
@@ -43,4 +57,17 @@ __all__ = [
     "manifold_htc_default",
     "ntu_reference",
     "uniform_flow_reference",
+    # Task 10 baselines
+    "ChannelDesign",
+    "ChannelJacketModel",
+    "ChannelOptions",
+    "GradedDensityDesign",
+    "UniformLatticeDesign",
+    "design_from_dict",
+    "evaluate_baseline",
+    "pareto_front",
+    "select_best",
+    "tune_b1",
+    "tune_b2",
+    "tune_b3",
 ]
