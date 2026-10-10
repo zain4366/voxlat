@@ -232,6 +232,25 @@ r = interstitial_heat_transfer(U_s, phi, a_sf, K_bulk, w=w, conductivity=0.40,
                                kinematic_viscosity=2.3e-6, prandtl=20.7) # r.h_sf, r.h_sf_a_sf, r.nusselt
 ```
 
+## Jacket device model (Task 9)
+
+The cooling jacket unwrapped to (s = r θ, z), depth-averaged over the 6 mm gap: Darcy-Forchheimer flow between
+the manifold slots (Task 6 surrogates × Task 7 finite-gap factor, Task 8 C_F), a two-equation heat model
+(coolant + lattice solid, h_sf a_sf from Task 8, fin-calibrated sleeve coupling) plus the sleeve wall with the
+q''(z) profile, a homogenized sandwich stress check and manufacturability flags. ~0.2-0.7 s per evaluation.
+
+```python
+from voxlat.device import JacketModel, evaluate
+out = evaluate(rho=0.35, w=0.0, L=4e-3)                       # uniform gyroid, 3 L/min (scalars, arrays or f(s, z))
+out["thermal_resistance"], out["delta_p"], out["pump_power"], out["mass"], out["min_structural_margin"]
+model = JacketModel()                                          # reuse for many evaluations (Task 11)
+out = model.evaluate(rho_field, w_field, L_field, a_z=1.0, flow_rate=5e-5, return_fields=True)
+```
+
+```powershell
+python scripts/task9_jacket_model.py     # verification, grid study, flow sweep, sensitivity, figures (~20 s)
+```
+
 ## Conventions
 
 - SI units inside the code; unit cells on normalized coordinates [0,1)³ scaled by cell size L.

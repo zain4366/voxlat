@@ -15,7 +15,7 @@ Plan: project doc `claude/voxlat_task_plan.md`. Reference numbers: `configs/refe
 | 6 | Closure surrogates | **done** (2026-10-09) |
 | 7 | Finite-gap study (RQ1) | **done** (2026-10-09, n = 32 in the sandbox; n = 48 overnight run optional) |
 | 8 | Literature closures (Nu, Forchheimer) | **done** (2026-10-10) |
-| 9 | Homogenized jacket device model | not started |
+| 9 | Homogenized jacket device model | **done** (2026-10-10) |
 | 10 | Baselines B1–B3 | not started |
 | 11 | Multi-objective optimization (RQ2, RQ3) | not started |
 | 12 | PicoGK geometry export | not started |
@@ -88,8 +88,8 @@ seeding reproducibility, run_record JSON-serializability, 300-dpi PNG output siz
 1. ~~Grading-gradient limit is a placeholder~~ → confirmed at 0.05 by the Task 7 graded strips (see Task 7).
 2. Q = 770 W vs total loss 957 W: the jacket is assumed to take ~80 % of the losses
    (rest via end windings / rotor / shaft). State this in the manuscript.
-3. Manifold "width" is an arc length at the lattice (15 mm); Task 9 must decide whether it is
-   measured at the mean radius (default assumption) or at r_inner.
+3. ~~Manifold "width" is an arc length at the lattice (15 mm); Task 9 must decide~~ → Task 9: measured at the
+   lattice mean radius r_m = 74.5 mm.
 4. Flow-rate sweep is stored in m³/s; use `cfg.operating.nominal_flow_rate_lpm` for labels.
 5. `legacy/` files were recreated from the project docs; if the copies on `D:\nyron 2`
    differ, the D: versions are the originals.
@@ -1355,8 +1355,173 @@ D φ = 0.65: variants 1–3 × Pr^(1/3), the Pr^0.4 band, Gnielinski and Wakao�
 pyarrow ×2) in 1.8 min (`results/task8_pytest_log.txt`). The 18 slow tests were not re-run: Task 8 adds no solver code
 and only appends imports to `voxlat.closures`.
 
-## Task 9 — Homogenized jacket device model
-_not started_
+## Task 9 — Homogenized jacket device model  ✅
+
+**Built**
+- `src/voxlat/device/jacket2d.py` — the jacket unwrapped to (s = r_m θ, z) over the full circumference and
+  depth-averaged over h; `JacketModel.evaluate(rho, w, L, a_z=1, flow_rate=None, return_fields=False) -> dict`
+  (fields: scalar, callable f(s, z), grid-shaped array, or any 2-D array interpolated periodically in s).
+  Module-level `evaluate(...)` (cached default model) is the interface Tasks 10/11 call.
+- `src/voxlat/device/__init__.py` exports the API. `scripts/task9_jacket_model.py` (~20 s; `--quick`).
+- Tests: `tests/test_jacket2d.py` (37). README section "Jacket device model (Task 9)".
+- **Fix in a Task 7 helper**: `finite_gap._features` now broadcasts mixed scalar/array (w, rho, a_z); before,
+  `FiniteGapCorrection.factor("K_t", N_array, w_array, 0.35)` raised. Values unchanged (regression test added).
+
+**Model (equations, BCs and assumptions are in the module docstring)**
+1. *Frame*: cell axes (x, y, z) = (r, s, z) (Task 7). Closure tensors are used as predicted; in-plane
+   permeability = Schur complement K_tt − K_tr K_rr⁻¹ K_rt (zero net radial flow; = (s, z) block for G/D),
+   so blends keep their off-diagonal K_sz.
+2. *Flow*: −∇p = μ (f_K K_t)⁻¹ U + ρ C_F |U| U/√K_e, ∇·U = 0. f_K = Task 7 factor (1 − a_K/N, N = h/L) on the
+   viscous term only; C_F Gajetti 2025 (Task 8); K_e = bulk K along the local flow direction. Manifold slots
+   = uniform-pressure plenums (width measured at r_m; axial extent centred), axial ends no-flow; Q fixes p_in.
+   Cell-centred FV, grid lines through every slot edge, TPFA with harmonic face mobility + implicit central
+   cross term (anisotropic M), Picard on |U| and e (relaxation 0.7; 3 iterations uniform, 10–15 graded).
+3. *Heat*: three depth-averaged fields — coolant T_f, lattice solid T_s, sleeve T_w (+ two well-mixed
+   plenums). Solid–fluid exchange h_sf a_sf h (Task 8, variant 1 × Pr^(1/3), our bulk K_e, a_sf, C_F);
+   sleeve → solid conductance **G_ws = H_v h η/(1 − η)**, calibrated so that without in-plane gradients the
+   model reproduces the exact 1-D fin across the gap (adiabatic outer wall): wall loss √(k_n H_v) tanh(mh)
+   and depth-mean solid excess η = tanh(mh)/mh; k_n = f_k k_eff,rr. Exposed sleeve fraction φ convects
+   directly with h_sf (assumption). In-plane conduction: sleeve k_s t_sl, lattice (k_ss, k_zz) h on T_s with
+   zero flux at slot faces, coolant φ k_f h. q_in(z) = q''(z) r_s/r_m, cell-averaged exactly (Σ = 770 W).
+   Slot sleeve ↔ plenum: h_m = 5.385 k_f/(2h) = 180 W/m²K (laminar plate channel, one side heated).
+   Upwind advection; adiabatic ends. Reported T_wall = stator side, T_w + q'' t_sl/k_s.
+   *Why three fields*: the first version slaved the lattice solid to the sleeve (T̄_s = T_f + η(T_w − T_f));
+   its in-plane solid conduction then had no consistent zero-flux condition at the slot edges and R converged
+   only at first order (1-D study: order 1.1). With its own T_s the order is ~1.8.
+4. *Structure*: rigid-face cylindrical sandwich, uniform core shear strain → τ_rs = T G_rs/(r_m ΣG_rs A)(r_m/r_i)²,
+   τ_rz = F G_rz/ΣG_rz A (r_m/r_i) at the sleeve radius (conservative), G = f_G C66 / f_G C55; coolant pressure
+   (gauge + Δp) in radial lattice tension with the outer-wall hoop share (lattice takes 98.7 %); local p99
+   σ_vm = K_ux σ'_rr + √3(K_sxy τ_rs + K_sxz τ_rz) (linear superposition = upper bound); **margin = σ_allow/σ_vm
+   (≥ 1 feasible)**. Outer wall: hoop share, strip bending over the 15 mm slot p b²/(2t²), clamped-plate bending
+   over a pore of radius L/2.
+5. *Mass*: AlSi10Mg lattice (ρ* h A over lattice cells) + sleeve + outer wall annuli. *Manufacturability*: design
+   bounds, L ≥ L_min(w, ρ*) (Task 1 table, a = 1 screening), in-plane |∇ρ*| L ≤ 0.05, N ≥ 1, pinch-neck area
+   fraction (0.3 < w < 0.7, ρ* < 0.4).
+
+**Public API (`voxlat.device`)**
+```python
+model = JacketModel(cfg=None, options=JacketOptions(...), closures=None)   # closures: SurrogateClosures("ensemble")
+out = model.evaluate(rho, w, L, a_z=1.0, flow_rate=None, return_fields=False)
+evaluate(rho, w, L, a_z=1.0, flow_rate=None, return_fields=False, model=None)   # cached default model
+# out (SI): thermal_resistance [K/W] = (T_wall_max - T_in)/Q, T_wall_max, T_wall_max_lattice, T_wall_max_s/_z,
+#   T_wall_mean, T_in, T_out, heat_input, delta_p [Pa], pump_power = dp Q / eta_pump [W], hydraulic_power,
+#   flow_rate, mass, mass_lattice, mass_walls, coolant_volume, min_structural_margin, lattice_margin,
+#   outer_wall_margin, structural{...}, manufacturable, manufacturability{within_bounds, bounds, cell_size_ok,
+#   cell_size_ratio_min, gradient_ok, gradient_max, gradient_limit, N_min, finite_gap_valid,
+#   pinch_neck_area_fraction}, mass_balance_error, max_cell_divergence, energy_balance_error,
+#   picard_iterations, picard_converged, diagnostics{flow_split, reynolds_*, forchheimer_number_range, h_sf_mean,
+#   U_eff_mean, fin_efficiency_mean, heat_to_manifold_plenums, manifold_htc, finite_gap_factor_K_mean, grid,
+#   timings}, wall_time, [fields: JacketFields (p, U_s, U_z, T_f, T_s_mean, T_w, T_wall, h_sf, eta, Re, Fo,
+#   K_inplane, sigma_vm, margin, face flows) on grid (n_s, n_z)]
+JacketOptions(spacing=1.25e-3, spacing_z=2.5e-3, backend="ensemble", finite_gap=True, check_bounds="warn",
+              cf_source="gajetti2025", inertia=True, nu_variant=1, pr_exponent=1/3, fin_model="fin"|"isothermal",
+              wall_exposed_convection=True, manifold_htc=None, sleeve_conduction=True, lattice_conduction=True,
+              fluid_conduction=True, wall_condition="flux"|"temperature", wall_temperature=None,
+              picard_tol=1e-8, picard_maxiter=200, picard_relaxation=0.7, gradient_limit=None)
+model.with_options(**kw); model.grid (JacketGrid: s_faces, z_faces, kind, area, meshgrid(), theta_plot_deg())
+SurrogateClosures(backend, finite_gap=True|False|("K_t","k_n","C_nn","G_t")), UniformClosures(K, k_eff, a_sf, ...)
+build_grid(cfg, spacing, spacing_z=None); cell_average_heat_flux(cfg, z_faces); in_plane_permeability(K)
+directional_permeability(Kt, e); fin_conductance(k_n, H_v, h, model); manifold_htc_default(cfg)
+uniform_flow_reference(model, rho, w, L, a_z, flow_rate); ntu_reference(model, rho, w, L, a_z, flow_rate)
+```
+
+**Verification (all pass; `results/task9_verification.csv`, `task9_verification.png`)**
+| Check | Result |
+|---|---|
+| Uniform Darcy flow, 3 grids (UniformClosures, f_K = 0.8) | Δp = ℓ μU/(f_K K) to 1e-10, U uniform, split 0.5/0.5 |
+| Uniform Darcy–Forchheimer, real closures, 1–5 L/min | Δp vs two-path analytic: **max 2e-13** |
+| Series layers ρ*(s) | Δp = μU Σ ds_i/K_i (harmonic faces) to 1e-10 |
+| Flux stencil, linear p, anisotropic M (cross term) | interior faces = −M∇p to 1e-10 |
+| Mirror z (K_sz → −K_sz); mirror s (flow split swaps) | Δp, R identical to 1e-9; split swapped to 1e-6 |
+| ε-NTU, fixed wall temperature (NTU = 1.52) | = exact discrete upwind solution to 1e-12; first order to ε-NTU: −1.4 / −0.37 / −0.09 % at 10 / 2.5 / 0.625 mm; Richardson(2.5, 1.25) within 5e-5 |
+| Imposed uniform flux, z-uniform (mid-path) | T_w − T_f = q_in/U_eff, (T_s − T_f)/(T_w − T_f) = η, dT_f/ds = q_in/(ρc_p U h): all to 1e-10 |
+| Fin conductance vs independent FD fin, mh = 0.1–6 | 1e-5 (FD error) |
+| Uncoupled limit of the 3-field model | = analytic fin conductance (1e-7) |
+| **Mass balance** (graded, blends, a_z = 1.25, 1 and 5 L/min) | in − out < 1e-13 Q; max cell divergence < 1e-14 Q (**requirement < 0.5 %**) |
+| **Energy balance** (same) | ρc_pQ(T_out − T_in) vs Σq A: < 2e-11 (**requirement < 0.5 %**); heat input = 770 W to 1e-12 |
+| Sandwich equilibrium, superposition, slot bending, mass annuli | exact |
+| Reference physics | Re_Dh 195, h_sf 4.73 kW/m²K (= Task 8 nominal), f_K = 0.822 (= 1 − 0.266/1.5), T_out − T_in = 4.273 K |
+
+**Grid convergence** (uniform gyroid ρ* 0.35, L 4 mm, 3 L/min; `results/task9_grid_convergence.csv`). Δp is
+grid-independent for uniform designs (1e-13). R converges with observed order **1.76 in s**; Richardson extrapolate
+R∞ = 0.02426 K/W (z = 2.5 mm). z refinement 2.5 → 0.625 mm raises R by 0.3 %.
+| Δs / Δz [mm] | grid | R [mK/W] | error vs R∞ | time |
+|---|---|---|---|---|
+| 5 / 2.5 | 94 × 20 | 26.19 | +7.9 % | 0.05 s |
+| 2.5 / 2.5 | 188 × 20 | 24.63 | +1.5 % | 0.08 s |
+| **1.25 / 2.5 (default)** | **376 × 20** | **24.37** | **+0.44 %** | **0.2 s** |
+| 0.625 / 2.5 | 750 × 20 | 24.29 | +0.13 % | 0.4 s |
+| 1.25 / 0.625 | 376 × 80 | 24.45 | — | 1.7 s |
+Net default error vs the fully refined value ≈ +0.1…0.5 %. `T_wall_max_lattice` (max over lattice cells only) is
+sampled at the first cell next to a slot edge, so it converges at first order (+3 % per halving) — a diagnostic,
+not an objective.
+
+**Runtime** (sandbox core): uniform 0.2 s; graded G/blend/stretched with full tensors 0.3–0.7 s (Picard 10–15
+iterations; closures 0.1–0.2 s, flow 0.1–0.35 s, heat 0.15 s) → **target 1–2 s met**.
+
+**Reference results** (`results/task9_reference_gyroid.json`, `task9_flow_sweep.csv`)
+
+Uniform gyroid ρ* = 0.35, L = 4 mm, 3 L/min: **R = 24.4 mK/W** (T_wall,max 68.8 °C, at the outlet slot, axial end),
+lattice-region max 62.9 °C, T_out 54.27 °C, **Δp = 1833 Pa** (Darcy share 38 %, Fo 1.65), **pump power 0.31 W**,
+**mass 0.344 kg** (lattice 0.123 + walls 0.221), U_eff 12.5 kW/m²K, fin efficiency 0.45, **min margin 12.7**
+(outer wall over the slot, 6.3 MPa; lattice 21: σ_vm,p99 3.8 MPa, 80 % from coolant pressure).
+
+| design (ρ* 0.35, L 4 mm) | R at 1 / 3 / 5 L/min [mK/W] | Δp at 3 L/min | pump power 3 / 5 L/min | lattice margin (3 L/min) |
+|---|---|---|---|---|
+| gyroid | 38.1 / 24.4 / 20.7 | 1833 Pa | 0.31 / 1.20 W | 21.0 |
+| blend w = 0.5 | 39.3 / 25.7 / 21.9 | 1877 Pa | 0.31 / 1.19 W | 8.3 |
+| diamond | 37.1 / 24.3 / 20.9 | 2035 Pa | 0.34 / 1.25 W | 29.3 |
+
+**Sensitivity of the reference design** (`results/task9_sensitivity.csv`; R / Δp change)
+| case | R | R_lattice | Δp |
+|---|---|---|---|
+| no finite-gap correction | −0.1 % | −0.2 % | −6.7 % |
+| Nu variant 2 (low-h bound) | +5.1 % | +7.8 % | 0 |
+| Pr exponent 0.4 | −3.1 % | −4.8 % | 0 |
+| C_F Table-2 plateau | −0.1 % | −0.2 % | +0.6 % |
+| isothermal fins (perfect-fin bound) | −16 % | −26 % | 0 |
+| no exposed-wall convection | +8.0 % | +12 % | 0 |
+| **manifold h_m = 1000 / 5000 W/m²K** (default 180) | **−12 % / −40 %** | −7 % / −24 % | 0 |
+| GP instead of ensemble surrogate | −0.06 % | −0.1 % | +0.03 % |
+| no lattice in-plane conduction | +1.4 % | +2.7 % | 0 |
+
+**Open issues / decisions for later tasks**
+1. **The hottest point is the unfinned sleeve under the manifold slots (RQ2-relevant, decide before Task 11).**
+   Each 15 mm slot leaves a sleeve strip cooled only by sleeve conduction into the lattice plus a weak plenum
+   coefficient; it runs ~6 K hotter than the lattice region and sets R. R is therefore sensitive to the
+   unknown h_m (−12 % at 1000, −40 % at 5000 W/m²K) and only weakly to the lattice design far from the slots.
+   Options: (a) keep R as defined (the optimizer will densify/refine near the slots, a real design effect);
+   (b) optimize `T_wall_max_lattice`-style metrics excluding the slot strips (needs a grid-robust definition);
+   (c) narrow the slots or treat manifold design as part of the problem; (d) report both and a h_m sensitivity.
+   B1 (helical channel, Task 10) must use the same manifold treatment or the comparison is unfair.
+2. Wall-exposed convection uses the interstitial h_sf on the exposed fraction φ of the sleeve (assumption;
+   removing it raises R by 8 %). Outer wall adiabatic, fin tip adiabatic (conservative).
+3. Structure is far from binding at the reference loads (margin ≥ 12; lattice ≥ 8 even for the blend). The
+   constraint margin ≥ 1 will only bind for low-ρ* blends or if loads/allowables change — expected; say so in
+   the paper. Localization factors are bulk p99 (no finite-gap localization data).
+4. Upwind advection is first order; at the default grid its error on ε is ~0.2 % (NTU test) — below the
+   closure uncertainties. A higher-order scheme is not needed for Task 11.
+5. Coolant in-plane conduction is stagnant φ k_f (no thermal dispersion); thermal dispersion would only smooth
+   T_f further. Curvature neglected (h/r_m = 0.08); the planform at r_m conserves volume and heat exactly.
+6. Expected `CorrelationRangeWarning`s (Task 8) are silenced inside the model (`on_extrapolation="ignore"`);
+   the surrogate still warns outside its training box (`check_bounds`).
+7. Manufacturability L_min is the a_z = 1 table (screening); final designs need `check_manufacturable` (Task 1).
+8. Citations to verify: Shah & London 1978 (*Laminar Flow Forced Convection in Ducts*, Nu = 5.385 for parallel
+   plates, one side at uniform flux, other adiabatic); Incropera & DeWitt (fin efficiency); Allen 1969
+   (*Analysis and Design of Structural Sandwich Panels*); Timoshenko & Woinowsky-Krieger 1959 (clamped circular
+   plate 3pa²/4t², clamped strip pb²/2t²); Quintard & Whitaker / Nield & Bejan (two-equation LTNE model).
+9. Workspace: PyPI blocked (no pyamg, pyarrow, torch); numpy 2.5.3, scipy 1.18.1, Python 3.13.
+
+**Figures** (`results/figures/`): `task9_fields_uniform_gyroid.png` (pressure, velocity with direction arrows,
+coolant and stator-side sleeve temperature maps, slots shaded, hot spot marked), `task9_verification.png`
+(ε-NTU convergence with the exact discrete solution, Δp vs analytic over 1–5 L/min, grid convergence of R),
+`task9_flow_sweep.png` (R, Δp, pump power vs flow rate for G, blend, D). Data: `results/task9_*.csv`,
+`results/task9_reference_gyroid.json`, `results/task9_pytest_log.txt`.
+
+**Tests**: `tests/test_jacket2d.py` 37 passed in ~11 s; with `tests/test_finite_gap.py` (touched helper, incl. its slow
+tests) 64 passed in 24 s; full suite `-m "not slow"` **408 passed + 4 skipped** (pyamg ×2, pyarrow ×2) in 2.0 min
+(`results/task9_pytest_log.txt`). The other 18 slow tests (Tasks 1–4, 6) were not re-run: Task 9 changes no solver
+code outside `finite_gap._features`.
 
 ## Task 10 — Baselines B1–B3
 _not started_
