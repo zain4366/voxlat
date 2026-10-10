@@ -1,0 +1,150 @@
+{
+  "thermal_resistance": 0.02267093125613025,
+  "T_wall_max": 340.60661706722027,
+  "T_wall_max_lattice": 334.67701614873863,
+  "T_wall_max_s": 0.23467365269243962,
+  "T_wall_max_z": 0.00125,
+  "T_wall_mean": 329.15468441863203,
+  "T_in": 323.15,
+  "T_out": 327.4230299666817,
+  "heat_input": 769.9999999999999,
+  "delta_p": 1826.9419856137742,
+  "pump_power": 0.3044903309356291,
+  "hydraulic_power": 0.09134709928068872,
+  "flow_rate": 5e-05,
+  "mass": 0.33487470444772605,
+  "mass_lattice": 0.11416407606518338,
+  "mass_walls": 0.22071062838254268,
+  "coolant_volume": 9.767111069217414e-05,
+  "min_structural_margin": 12.280293004136437,
+  "lattice_margin": 12.280293004136437,
+  "outer_wall_margin": 12.693796974809505,
+  "structural": {
+    "sigma_vm_max": 6514502.542655389,
+    "argmin_s": 0.08030878512788475,
+    "argmin_z": 0.00125,
+    "contrib_pressure": 5735425.749748212,
+    "contrib_torque": 305620.1868220373,
+    "contrib_thrust": 473456.6060851395,
+    "tau_rs_max": 46985.38569456519,
+    "tau_rz_max": 72788.19333849725,
+    "sigma_rr_max": 200395.187213943,
+    "pressure": 201826.94198561378,
+    "lattice_pressure_share_min": 0.9733991662139053,
+    "outer_wall_hoop": 210724.02378961717,
+    "outer_wall_slot_bending": 6302290.80855459,
+    "outer_wall_pore_bending": 151370.20648921034
+  },
+  "manufacturable": true,
+  "manufacturability": {
+    "within_bounds": true,
+    "bounds": {
+      "rho": true,
+      "w": true,
+      "L": true,
+      "a_z": true
+    },
+    "cell_size_ok": true,
+    "cell_size_ratio_min": 2.2011924919407204,
+    "gradient_ok": true,
+    "gradient_max": 0.007400985945695398,
+    "gradient_limit": 0.05,
+    "N_min": 1.5,
+    "finite_gap_valid": true,
+    "pinch_neck_area_fraction": 0.0,
+    "manufacturable": true
+  },
+  "mass_balance_error": 3.8624702394796095e-14,
+  "max_cell_divergence": 1.1848417142212407e-14,
+  "energy_balance_error": 5.128457543195238e-12,
+  "picard_iterations": 6,
+  "picard_converged": true,
+  "diagnostics": {
+    "flow_split": [
+      0.4999999999999923,
+      0.500000000000061
+    ],
+    "reynolds_range": [
+      186.44443984742063,
+      219.76605255537493
+    ],
+    "reynolds_median": 202.22428533796804,
+    "forchheimer_number_range": [
+      1.6009902348243596,
+      1.8312426520948744
+    ],
+    "h_sf_mean": 4699.740295783077,
+    "U_eff_mean": 12009.823580675806,
+    "fin_efficiency_mean": 0.4311421503554253,
+    "heat_to_manifold_plenums": {
+      "inlet": 1.550969019029885,
+      "outlet": 1.2033403529629214
+    },
+    "manifold_htc": 179.5,
+    "finite_gap_factor_K_mean": 0.8200339783678856,
+    "grid": [
+      376,
+      20
+    ],
+    "timings": {
+      "closures": 0.1509418999994523,
+      "flow": 0.16311249999853317,
+      "heat": 0.159332600000198,
+      "rest": 0.003147499999613501
+    }
+  },
+  "wall_time": 0.4768196999975771,
+  "design": {
+    "family": "B3",
+    "type": "graded_density_lattice",
+    "rho_path": [
+      0.250858,
+      0.232731,
+      0.367829,
+      0.5
+    ],
+    "amp_z": -0.002265,
+    "L": 0.004,
+    "w": 0.0,
+    "a_z": 1.0
+  },
+  "T_wall_max_active": 334.67701614873863,
+  "R_active": 0.01497015084251773,
+  "selection_rule": {
+    "objective": "thermal_resistance at 3 L/min",
+    "pump_power_cap": 0.3055407983907115,
+    "constraints": [
+      "manufacturable",
+      "min_structural_margin >= 1"
+    ]
+  },
+  "run_record": {
+    "params": {
+      "family": "B3",
+      "type": "graded_density_lattice",
+      "rho_path": [
+        0.250858,
+        0.232731,
+        0.367829,
+        0.5
+      ],
+      "amp_z": -0.002265,
+      "L": 0.004,
+      "w": 0.0,
+      "a_z": 1.0
+    },
+    "params_json": "{\"L\": 0.004, \"a_z\": 1.0, \"amp_z\": -0.002265, \"family\": \"B3\", \"rho_path\": [0.250858, 0.232731, 0.367829, 0.5], \"type\": \"graded_density_lattice\", \"w\": 0.0}",
+    "voxlat_version": "0.1.0",
+    "git_hash": "9a95c4caccfa+dirty",
+    "resolution": [
+      376,
+      20
+    ],
+    "wall_time_s": 0.4768196999975771,
+    "timestamp_utc": "2026-10-10T17:49:56+00:00",
+    "python": "3.13.7",
+    "numpy": "2.5.3",
+    "platform": "Windows-11",
+    "extra": {}
+  }
+}
