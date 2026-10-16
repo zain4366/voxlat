@@ -1,0 +1,177 @@
+{
+  "layout": "slots",
+  "method": "nsga2",
+  "seed": 4,
+  "settings": {
+    "layout": "slots",
+    "flow_rate": null,
+    "spec": {
+      "rho": [
+        8,
+        4
+      ],
+      "w": [
+        8,
+        4
+      ],
+      "L": [
+        4,
+        2
+      ],
+      "a_z": [
+        0,
+        0
+      ],
+      "fixed": {
+        "a_z": 1.0
+      }
+    },
+    "model_options": {},
+    "constraints": {
+      "table": "fine",
+      "cell_margin": 0.01,
+      "valley_wall": 0.09
+    }
+  },
+  "objective_space": {
+    "lo": [
+      5.0,
+      -3.0,
+      0.28
+    ],
+    "hi": [
+      40.0,
+      0.5,
+      0.42
+    ],
+    "transform": "R mK/W, log10 pump power W, mass kg"
+  },
+  "n_var": 72,
+  "variable_names": [
+    "rho_0_0",
+    "rho_0_1",
+    "rho_0_2",
+    "rho_0_3",
+    "rho_1_0",
+    "rho_1_1",
+    "rho_1_2",
+    "rho_1_3",
+    "rho_2_0",
+    "rho_2_1",
+    "rho_2_2",
+    "rho_2_3",
+    "rho_3_0",
+    "rho_3_1",
+    "rho_3_2",
+    "rho_3_3",
+    "rho_4_0",
+    "rho_4_1",
+    "rho_4_2",
+    "rho_4_3",
+    "rho_5_0",
+    "rho_5_1",
+    "rho_5_2",
+    "rho_5_3",
+    "rho_6_0",
+    "rho_6_1",
+    "rho_6_2",
+    "rho_6_3",
+    "rho_7_0",
+    "rho_7_1",
+    "rho_7_2",
+    "rho_7_3",
+    "w_0_0",
+    "w_0_1",
+    "w_0_2",
+    "w_0_3",
+    "w_1_0",
+    "w_1_1",
+    "w_1_2",
+    "w_1_3",
+    "w_2_0",
+    "w_2_1",
+    "w_2_2",
+    "w_2_3",
+    "w_3_0",
+    "w_3_1",
+    "w_3_2",
+    "w_3_3",
+    "w_4_0",
+    "w_4_1",
+    "w_4_2",
+    "w_4_3",
+    "w_5_0",
+    "w_5_1",
+    "w_5_2",
+    "w_5_3",
+    "w_6_0",
+    "w_6_1",
+    "w_6_2",
+    "w_6_3",
+    "w_7_0",
+    "w_7_1",
+    "w_7_2",
+    "w_7_3",
+    "L_0_0",
+    "L_0_1",
+    "L_1_0",
+    "L_1_1",
+    "L_2_0",
+    "L_2_1",
+    "L_3_0",
+    "L_3_1"
+  ],
+  "anchors": true,
+  "pop_size": 100,
+  "n_gen": 100,
+  "status": "done",
+  "wall_time_s": 5290.236812028999,
+  "n_expensive": 10000,
+  "n_proposals": 10000,
+  "run_record": {
+    "params": {
+      "layout": "slots",
+      "flow_rate": null,
+      "spec": {
+        "rho": [
+          8,
+          4
+        ],
+        "w": [
+          8,
+          4
+        ],
+        "L": [
+          4,
+          2
+        ],
+        "a_z": [
+          0,
+          0
+        ],
+        "fixed": {
+          "a_z": 1.0
+        }
+      },
+      "model_options": {},
+      "constraints": {
+        "table": "fine",
+        "cell_margin": 0.01,
+        "valley_wall": 0.09
+      }
+    },
+    "params_json": "{\"constraints\": {\"cell_margin\": 0.01, \"table\": \"fine\", \"valley_wall\": 0.09}, \"flow_rate\": null, \"layout\": \"slots\", \"model_options\": {}, \"spec\": {\"L\": [4, 2], \"a_z\": [0, 0], \"fixed\": {\"a_z\": 1.0}, \"rho\": [8, 4], \"w\": [8, 4]}}",
+    "voxlat_version": "0.1.0",
+    "git_hash": "e67e5c568635+dirty",
+    "resolution": null,
+    "wall_time_s": 5290.236812028999,
+    "timestamp_utc": "2026-10-16T06:34:29+00:00",
+    "python": "3.12.15",
+    "numpy": "2.5.4",
+    "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+    "extra": {
+      "method": "nsga2",
+      "seed": 4
+    }
+  }
+}
