@@ -1,0 +1,105 @@
+name: reproduce
+
+# Task 13 reproducibility pass:
+#   * lock   - install every extra, write the environment lock file (requirements/lock-<os>-py<ver>.txt)
+#   * tests  - pytest -m "not slow" with all optional deps (torch, pymoo, botorch, pyamg, pyarrow)
+#   * quick  - scripts/experiments/run_all.py --quick (every producer at plumbing size, in a repo copy)
+#   * replot - scripts/experiments/run_all.py --replot (figures/tables from the committed data) + PDF gallery
+# Artifacts: lock files, pytest logs, quick/replot summaries, figure gallery, consistency report.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["task13-*"]
+
+jobs:
+  reproduce:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest   # the project laptop: Windows 11, Python 3.13
+            python-version: "3.13"
+            replot: false
+          - os: ubuntu-latest
+            python-version: "3.12"
+            replot: true
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: bash
+    env:
+      MPLBACKEND: Agg
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install (all extras; CPU-only torch)
+        run: |
+          python -m pip install --upgrade pip
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            pip install torch --index-url https://download.pytorch.org/whl/cpu
+          fi
+          pip install -e ".[ml,opt,amg]"
+      - name: Write the environment lock file
+        run: |
+          mkdir -p requirements
+          os=$(echo "$RUNNER_OS" | tr '[:upper:]' '[:lower:]')
+          f="requirements/lock-${os}-py${{ matrix.python-version }}.txt"
+          {
+            echo "# VoxLat environment lock - pip freeze of a working install (CI run ${GITHUB_RUN_ID}, $(date -u +%F))."
+            echo "# Install: python -m pip install -r $f && python -m pip install -e . --no-deps"
+            echo "# Python $(python -c 'import platform; print(platform.python_version())') on ${RUNNER_OS}; extras ml, opt, amg."
+            if [ "$RUNNER_OS" = "Linux" ]; then echo "--extra-index-url https://download.pytorch.org/whl/cpu"; fi
+            pip freeze --exclude-editable | grep -v -i "^voxlat"
+          } > "$f"
+          cat "$f"
+      - name: Tests (fast)
+        run: |
+          python -m pytest -m "not slow" -p no:cacheprovider 2>&1 | tee pytest_fast.txt
+          test ${PIPESTATUS[0]} -eq 0
+      - name: Quick reproduction (all producers, plumbing size)
+        run: python scripts/experiments/run_all.py --quick --sandbox "$RUNNER_TEMP/voxlat_quick"
+      - name: Replot from committed data + gallery + consistency audit
+        if: matrix.replot
+        run: python scripts/experiments/run_all.py --replot || true
+      - name: Collect
+        if: always()
+        run: |
+          mkdir -p out
+          cp -r requirements out/ 2>/dev/null || true
+          cp pytest_fast.txt out/ 2>/dev/null || true
+          cp "$RUNNER_TEMP"/voxlat_quick/results/reproduce/quick_*/summary.json out/quick_summary.json 2>/dev/null || true
+          cp -r "$RUNNER_TEMP"/voxlat_quick/results/reproduce out/quick_logs 2>/dev/null || true
+          cp -r results/reproduce out/replot_logs 2>/dev/null || true
+          cp results/figure_gallery.pdf out/ 2>/dev/null || true
+          cp -r results/tables out/ 2>/dev/null || true
+      - name: Report (annotations - readable through the checks API without artifact access)
+        if: always()
+        run: |
+          note() { python -c "import sys; t=open(sys.argv[2], encoding='utf-8').read(); t=t.replace('%','%25').replace('\r','').replace('\n','%0A'); print(f'::notice title={sys.argv[1]}::' + t)" "$1" "$2"; }
+          for f in requirements/lock-*.txt; do [ -f "$f" ] && note "LOCK $(basename $f)" "$f"; done
+          { grep -E "passed|failed" pytest_fast.txt | tail -1; grep -E "^(FAILED|ERROR) " pytest_fast.txt; } > pytest_line.txt 2>/dev/null
+          [ -s pytest_line.txt ] && note "PYTEST" pytest_line.txt
+          python - <<'PY' > run_lines.txt || true
+          import glob, json
+          for f in sorted(glob.glob("out/quick_summary.json") + glob.glob("results/reproduce/replot_*/summary.json")):
+              d = json.load(open(f))
+              print(f"{d['mode']}: wall {d['wall_s']} s, python {d['python']}, {d['platform']}")
+              for r in d["steps"]:
+                  print(f"  {r['step']:16s} {r['status']:16s} {r.get('seconds', 0):8.1f} s  {r.get('note', '')[:80]}")
+                  if r["status"] == "FAILED":
+                      print("    " + "\n    ".join(r.get("tail", [])[-6:]))
+          PY
+          [ -s run_lines.txt ] && note "RUNS" run_lines.txt
+          [ -f results/reproduce/consistency_report.md ] && head -20 results/reproduce/consistency_report.md > cons.txt && note "CONSISTENCY" cons.txt
+          true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reproduce-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: out/

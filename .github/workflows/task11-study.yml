@@ -1,0 +1,135 @@
+# Task 11 full-budget study on GitHub-hosted runners: one optimization run per job (30 jobs, up to 20 at a time),
+# then a collect job that runs the analysis and commits the results to the branch that triggered it.
+# Trigger: push to branch task11-cloud-run, or "Run workflow" (workflow_dispatch) on that branch.
+name: task11-study
+
+on:
+  push:
+    branches: [task11-cloud-run]
+    paths: [".github/workflows/task11-study.yml", "configs/task11_cloud_run.txt"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: task11-study-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  study:
+    name: ${{ matrix.layout }}/${{ matrix.method }} s${{ matrix.seed }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 355
+    strategy:
+      fail-fast: false
+      matrix:
+        # long runs first (NSGA-II 10 000 evaluations, qNEHVI 200 with BoTorch), Sobol 1 000 last
+        include:
+          - {layout: slots, method: nsga2, seed: 0}
+          - {layout: slots, method: nsga2, seed: 1}
+          - {layout: slots, method: nsga2, seed: 2}
+          - {layout: slots, method: nsga2, seed: 3}
+          - {layout: slots, method: nsga2, seed: 4}
+          - {layout: end_rings, method: nsga2, seed: 0}
+          - {layout: end_rings, method: nsga2, seed: 1}
+          - {layout: end_rings, method: nsga2, seed: 2}
+          - {layout: end_rings, method: nsga2, seed: 3}
+          - {layout: end_rings, method: nsga2, seed: 4}
+          - {layout: slots, method: qnehvi, seed: 0}
+          - {layout: slots, method: qnehvi, seed: 1}
+          - {layout: slots, method: qnehvi, seed: 2}
+          - {layout: slots, method: qnehvi, seed: 3}
+          - {layout: slots, method: qnehvi, seed: 4}
+          - {layout: end_rings, method: qnehvi, seed: 0}
+          - {layout: end_rings, method: qnehvi, seed: 1}
+          - {layout: end_rings, method: qnehvi, seed: 2}
+          - {layout: end_rings, method: qnehvi, seed: 3}
+          - {layout: end_rings, method: qnehvi, seed: 4}
+          - {layout: slots, method: sobol, seed: 0}
+          - {layout: slots, method: sobol, seed: 1}
+          - {layout: slots, method: sobol, seed: 2}
+          - {layout: slots, method: sobol, seed: 3}
+          - {layout: slots, method: sobol, seed: 4}
+          - {layout: end_rings, method: sobol, seed: 0}
+          - {layout: end_rings, method: sobol, seed: 1}
+          - {layout: end_rings, method: sobol, seed: 2}
+          - {layout: end_rings, method: sobol, seed: 3}
+          - {layout: end_rings, method: sobol, seed: 4}
+    env:
+      VOXLAT_TORCH_THREADS: "4"
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install (CPU torch for BoTorch)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[opt]"
+      - name: Run
+        # stop 15 min before the 6 h job limit so the checkpoint is still uploaded
+        run: |
+          timeout 20400 python scripts/task11_optimize.py --layout ${{ matrix.layout }} --method ${{ matrix.method }} \
+            --seeds ${{ matrix.seed }} --parallel 1 --skip-done
+      - name: Stage result
+        if: always()
+        run: |
+          mkdir -p out/${{ matrix.layout }} && touch out/.keep
+          cp results/task11/${{ matrix.layout }}/${{ matrix.method }}_s${{ matrix.seed }}.* out/${{ matrix.layout }}/ || true
+          cat out/${{ matrix.layout }}/${{ matrix.method }}_s${{ matrix.seed }}.json | head -c 400 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: run-${{ matrix.layout }}-${{ matrix.method }}-s${{ matrix.seed }}
+          path: |
+            out/.keep
+            out/${{ matrix.layout }}/
+          retention-days: 30
+
+  collect:
+    needs: study
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: run-*
+          merge-multiple: true
+          path: results/task11
+      - name: Check runs
+        run: |
+          python - <<'PY'
+          import json, glob
+          rows = []
+          for f in sorted(glob.glob("results/task11/*/*.json")):
+              j = json.load(open(f))
+              rows.append((f.split("task11/")[1], j.get("status"), j.get("n_expensive"),
+                           (j.get("settings") or {}).get("constraints"), j.get("bo_backend", "")))
+          for r in rows: print(*r)
+          done = [r for r in rows if r[1] == "done" and r[3] is not None]
+          print(f"{len(done)} of 30 runs done with the corrected rule")
+          open("results/task11_cloud_status.txt", "w").write("\n".join(" ".join(map(str, r)) for r in rows) + "\n")
+          PY
+      - name: Analysis
+        run: python scripts/task11_analysis.py
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results
+          git commit -m "Task 11: corrected-rule study results (GitHub Actions run ${{ github.run_id }})" || exit 0
+          git push

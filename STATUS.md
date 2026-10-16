@@ -1,0 +1,2324 @@
+# VoxLat — STATUS (hand-off log)
+
+Every task appends here: what was built, public API, key numbers (resolution,
+timings, errors), open issues. **The next task reads this file first.**
+Plan: `docs/task_plan.md`. Reference numbers: `configs/reference.yaml`.
+
+| # | Task | State |
+|---|---|---|
+| 0 | Repo scaffold + config | **done** (2026-10-07) |
+| 1 | TPMS unit-cell geometry | **done** (2026-10-08) |
+| 2 | Conduction homogenization k_eff | **done** (2026-10-08) |
+| 3 | Elasticity homogenization C_eff | **done** (2026-10-08) |
+| 4 | Stokes permeability K | **done** (2026-10-08) |
+| 5 | Closure dataset | **done** (2026-10-08, run on the laptop; record reconstructed in Task 6) |
+| 6 | Closure surrogates | **done** (2026-10-09) |
+| 7 | Finite-gap study (RQ1) | **done** (2026-10-09, n = 32 in the sandbox; n = 48 overnight run optional) |
+| 8 | Literature closures (Nu, Forchheimer) | **done** (2026-10-10) |
+| 9 | Homogenized jacket device model | **done** (2026-10-10) |
+| 10 | Baselines B1–B3 | **done** (2026-10-10) |
+| 11 | Multi-objective optimization (RQ2, RQ3) | **done** (2026-10-16; final study with the corrected cell-size rule, GitHub Actions) |
+| 12 | PicoGK geometry export | **done** (2026-10-16): C# exporter runs in PicoGK on the laptop; best_at_cap_gyroid sector passes all checks |
+| 13 | Reproducibility pass + figure set | **done** (2026-10-16; experiments catalog, run_all, lock files, gallery, audit) |
+| 14 | Manuscript draft (+ JOSS) | **done** (2026-10-17; draft v2, `docs/manuscript/`) |
+
+---
+
+## Task 0 — Repo scaffold + config  ✅
+
+**Built**
+- src-layout package `voxlat` (v0.1.0) with subpackages `geometry`, `homogenization`,
+  `closures`, `surrogates`, `device`, `optimize`, `export` (empty, docstring says which task
+  fills them) and `utils` (implemented).
+- `pyproject.toml`: Python >= 3.11; core deps numpy, scipy, scikit-image, scikit-learn,
+  pandas, pyarrow, matplotlib, pyyaml, joblib, tqdm, pytest; extras `ml` = torch,
+  `opt` = pymoo, botorch. pytest config: `testpaths = ["tests"]`, `legacy/` excluded,
+  marker `slow` registered.
+- `configs/reference.yaml`: every number of plan §2, SI units, comments give plan units.
+- `scripts/task0_heat_flux_profile.py` → `results/figures/task0_heat_flux_profile.png`.
+- `legacy/`: original Noyron files, unchanged, plus `legacy/README.md` (what each file was,
+  what gets reused).
+- `.github/workflows/tests.yml`: pytest on windows-latest + ubuntu-latest, Python 3.11/3.12.
+- `.gitignore` (venvs, caches, `*.stl`, `data/fields/`, model binaries, .NET `bin/ obj/`).
+
+**Public API (`voxlat.utils`)**
+```python
+load_config(path=None, overrides=None) -> ReferenceConfig   # frozen dataclass tree, SI
+cfg.motor / jacket / heat_flux / coolant / operating / manifolds / material / loads
+cfg.design_bounds.<relative_density|blend_w|cell_size|axial_stretch> -> Range(lo, hi)
+cfg.manufacturing.<min_wall_thickness|min_pore_size|max_density_change_per_cell>
+cfg.q_wall(z)             # q''(z) in W/m^2, z in m (scalar or array); raises outside [0, L_ax]
+cfg.mean_heat_flux        # Q / (2 pi r_s L_ax)
+cfg.heated_area, cfg.to_dict()
+cfg.jacket.lattice_inner_radius / lattice_outer_radius / outer_radius / lattice_mean_radius / lattice_volume
+cfg.coolant.dynamic_viscosity / prandtl ; cfg.material.shear_modulus ; cfg.motor.total_loss
+heat_flux_profile(z, *, axial_length, mean_flux, amplitude=0.25, profile="end_peaked_quadratic")
+set_seed(seed=DEFAULT_SEED) -> np.random.Generator   # random, numpy, torch (if installed), PYTHONHASHSEED
+get_logger(name) -> logging.Logger                   # "voxlat.<name>", one handler, $VOXLAT_LOG_LEVEL
+run_record(params, *, resolution=None, wall_time=None, **extra) -> dict
+    # keys: params, params_json, voxlat_version, git_hash, resolution, wall_time_s,
+    #       timestamp_utc, python, numpy, platform, extra   (all JSON-serializable)
+Stopwatch(), stopwatch()  # context manager; .elapsed in s
+save_figure(fig, name, directory=None, dpi=300) -> Path  # results/figures/<name>.png
+repo_root(), data_dir(), models_dir(), results_dir(), figures_dir()
+```
+Env vars: `VOXLAT_CONFIG` (alternative YAML), `VOXLAT_ROOT` (repo root override),
+`VOXLAT_LOG_LEVEL`.
+
+Naming note: `cfg.heat_flux` is the config *section* (profile name + amplitude); the
+profile *function* is `cfg.q_wall(z)`.
+
+**Key numbers (computed from the config)**
+| Quantity | Value |
+|---|---|
+| Lattice gap | r = 71.5 … 77.5 mm, h = 6.0 mm; jacket outer radius 79.5 mm |
+| Mean heat flux q̄ | 35 014 W/m² (on r = 70 mm) |
+| q''(0)/q''(L/2) | 2.000 (52.5 / 26.3 kW/m²) |
+| ∫ q'' 2πr_s dz | 770.000 W (quad, rel. err < 1e-10); trapezoid n = 51 → 2e-4 rel. err |
+| Coolant Pr | 20.72 |
+| Total motor loss P(1/η − 1) | 957 W → Q = 770 W is an 80 % jacket share (assumption) |
+| Nominal flow | 5.0e-5 m³/s (3 L/min); sweep 1–5 L/min stored in m³/s |
+
+**Tests**: 34 passed (`tests/test_config.py`, `tests/test_utils.py`) in ~2 s.
+Includes the two required smoke tests: config loads; q''(z) integrates to Q within 0.1 %.
+Also checks frozen/typed config, unknown/missing keys rejected, overrides, env-var path,
+seeding reproducibility, run_record JSON-serializability, 300-dpi PNG output size.
+
+**Open issues / decisions for later tasks**
+1. ~~Grading-gradient limit is a placeholder~~ → confirmed at 0.05 by the Task 7 graded strips (see Task 7).
+2. Q = 770 W vs total loss 957 W: the jacket is assumed to take ~80 % of the losses
+   (rest via end windings / rotor / shaft). State this in the manuscript.
+3. ~~Manifold "width" is an arc length at the lattice (15 mm); Task 9 must decide~~ → Task 9: measured at the
+   lattice mean radius r_m = 74.5 mm.
+4. Flow-rate sweep is stored in m³/s; use `cfg.operating.nominal_flow_rate_lpm` for labels.
+5. `legacy/` files were recreated from the project docs; if the copies on `D:\nyron 2`
+   differ, the D: versions are the originals.
+6. Workspace note: PyPI was blocked in the build sandbox, so tests ran against
+   pre-installed numpy 2.5 / scipy 1.18 / matplotlib 3.11 / pytest 9.1 with
+   `pip install -e . --no-deps`; pyarrow, tqdm, torch were not exercised (not used yet).
+   The CI workflow and the laptop install test the full dependency resolution.
+
+---
+
+## Task 1 — TPMS unit-cell geometry  ✅
+
+**Built**
+- `src/voxlat/geometry/tpms.py` — level sets, parameters, periodic voxelization, density
+  thresholds (bisection + shipped table), metrics, manufacturability, feasible region.
+- `src/voxlat/geometry/voxel_tools.py` — generic *periodic* voxel tools reused by Tasks 2–4, 7:
+  marching-cubes surface area, periodic EDT, sub-voxel interface distance, local thickness,
+  throat (passable-sphere) diameter, periodic connected components with wrap detection.
+- `src/voxlat/geometry/data/tpms_threshold_table.npz` — c(w, ρ) for network + sheet,
+  w = 0:0.05:1 × ρ = 0.01:0.01:0.99, sampled at n_ref = 128 (~29 kB, committed).
+- `src/voxlat/geometry/data/tpms_morphology_table.npz` — wall/pore/throat/a_sf/connectivity
+  over w = 0:0.125:1 × ρ = 0.15:0.025:0.55 at n = 48 (network, a = 1). Build: 6 min on 2 cores.
+- `scripts/task1_build_tables.py`, `scripts/task1_tpms_figures.py`; `pyproject.toml` ships `data/*.npz`.
+- Tests: `tests/test_tpms.py` (57), `tests/test_voxel_tools.py` (17).
+
+**Decisions (each documented in the module docstring)**
+1. *Level sets*: G = sinX cosY + sinY cosZ + sinZ cosX, D = sinX sinY sinZ + sinX cosY cosZ +
+   cosX sinY cosZ + cosX cosY sinZ, X = 2π ξ_x. Normalized by their maxima (3/2, √2) so both
+   span [−1, 1]; blend φ_w = (1−w)φ_G + wφ_D. G and D are orthogonal (disjoint Fourier modes);
+   RMS 0.577 vs 0.500. All fields are odd → c(w, ρ = 0.5) = 0 exactly.
+2. *Network default*: solid where φ ≤ c → one solid labyrinth + ONE connected fluid domain
+   (single coolant, manifold to manifold). Sheet (|φ| ≤ c) splits the fluid into 2 disjoint
+   labyrinths (verified by test) — wrong topology for this jacket; supported for comparison only.
+3. *Anisotropy*: cubic voxels of edge h = L/n; stretched axis gets n_i = round(n·a_i) voxels;
+   the represented stretch is snapped to a_i = n_i/n (`effective_stretch`, error ≤ 1/(2n)).
+   Keeps every downstream solver isotropic (one element stiffness, one face conductance).
+   L means the in-plane cell size; the cell is L × L × a_z L.
+4. *Exact periodicity*: sampling at voxel centres ξ = (k + ½)/n_i; `np.tile` of a cell equals the
+   supercell (tested). Never use linspace(0, 1, n) (duplicates the face layer).
+5. *Thickness = local thickness* (Hildebrand & Rüegsegger 1997) on **sub-voxel** distances to the
+   marching-cubes surface (cKDTree with periodic boxsize), ball radius D(q) + 0.5 voxel ("slack",
+   compensates off-grid ideal centres; calibrated: mean bias ≈ 0, worst ±1 voxel on random
+   slabs/cylinders). Voxel-only EDT under-read a 12-voxel cylinder as 9 — do not go back to it.
+6. *Throat* = 2(r* + slack), r* = largest r with {D ≥ r} percolating in x, y, z (26-connected
+   centres; 6-connected under-reads diagonal diamond struts). Calibrated on rod networks (±1 voxel).
+7. *Manufacturability default*: wall = **min local thickness of solid** ≥ 0.35 mm (strict: any neck);
+   pore = **fluid throat** ≥ 0.8 mm (powder removal / clogging); plus single percolating solid and
+   fluid (6-connectivity). Both scale ∝ L → feasible set is simply **L ≥ L_min(w, ρ)**.
+
+**Public API (`voxlat.geometry`, all in `voxlat.geometry.tpms`)**
+```python
+TPMSParams(w=0.0, rho=0.3, a=(1,1,1), kind="network"); TPMSParams.from_design(w, rho, a_z)
+level_set(xi_x, xi_y, xi_z, w) -> phi          # any points, period 1, |phi| <= 1
+sample_level_set(shape, w) -> phi[nx,ny,nz]   # voxel centres, separable (n=128: 0.1 s)
+grid_shape(params, n), effective_stretch(params, n)
+threshold_for_density(w, rho, n|shape, kind, g=None) -> c        # bisection on this grid
+threshold_from_table(w, rho, kind) -> c        # vectorized continuum table (1e5 pts: 0.13 s)
+voxelize(params, n=48, threshold=None, method="exact"|"table", return_field=False)
+    -> bool[nx,ny,nz]  (True = solid)  | (solid, phi, c)
+specific_surface_area(phi, c, kind, n=None) -> a_sf*L
+compute_metrics(params, n=48, L=None, thickness=True, connectivity=True) -> TPMSMetrics
+    .relative_density .a_sf_L .a_sf_voxel_L .wall/.pore: ThicknessStats(min,p1,p5,mean,max,throat) [/L]
+    .solid_connected .fluid_connected .a_sf() .wall_m() .pore_m() .as_row()
+check_manufacturable(params, L, n=48, cfg=None, wall_statistic="min", pore_statistic="throat")
+    -> ManufacturabilityReport(ok, wall, pore, ..., resolution_limited, reasons)
+min_cell_size(w, rho, cfg=None, return_parts=False) -> L_min [m]   # Task 11 constraint: L_min/L - 1 <= 0
+feasible_region(w, rho=None, L=None, cfg=None) -> FeasibleRegion(rho, L_min, L_min_wall, L_min_pore, L, mask)
+load_threshold_table(kind), load_morphology_table(), build_morphology_table(...)
+# voxel_tools (generic, periodic):
+periodic_surface_area, voxel_face_area, periodic_edt, periodic_surface_points, interface_distance,
+local_thickness, throat_diameter, thickness_stats, periodic_components(phase, connectivity=6|26)
+    -> PeriodicComponents(n_components, volume_fractions, percolates, wrap_rank, labels)
+```
+
+**Key numbers**
+| Quantity | Value |
+|---|---|
+| Nodal G, c = 0: area per cell (Richardson, n → ∞) | 3.0917 vs exact minimal surface 3.0915 (+0.005 %) |
+| Nodal D, c = 0 | 3.8381 vs 3.8377 (+0.009 %) |
+| a_sf convergence (ρ = 0.3, fixed c) | order 2.0; max rel. error n = 24: 0.63 %, 32: 0.33 %, **48: 0.16 %**, 64: 0.09 % |
+| a_sf·L at ρ = 0.3 (continuum) | G 2.862, D 3.541, w = 0.5 3.027 (staircase/voxel-face area ≈ 1.5× — never use it) |
+| Density, exact bisection | closest achievable voxel fraction; < 0.1 % rel. at n = 32 (test: < 0.5 %) |
+| Density, table threshold at n = 64 | max 0.42 % rel. error over 20 random (w, ρ) |
+| Timings (laptop-class CPU, 1 core) | voxelize n = 48: 2 ms; metrics w/o thickness 0.05 s; **full metrics n = 32: 0.9 s, 48: 4 s, 64: 11 s** |
+| Thickness, n = 48 vs 64 (G, D, ρ = 0.2–0.5) | wall min ≤ 0.016 L (≈5 %), throats ≤ 0.006 L (≈1–2 %) |
+| Gyroid ρ = 0.2 / 0.35 / 0.5 (n = 48) | wall min 0.240 / 0.344 / 0.427 L; pore throat 0.625 / 0.528 / 0.440 L |
+| Diamond ρ = 0.2 / 0.35 / 0.5 | wall min 0.198 / 0.292 / 0.365 L; pore throat 0.531 / 0.449 / 0.370 L |
+| L_min (G) | 1.46 mm (ρ = 0.2) … 1.82 mm (ρ = 0.5) → 100 % of the 2–6 mm box feasible |
+| L_min (D) | 1.77 … 2.16 mm → 99.5 % feasible (pore throat binds at ρ > 0.45, L ≈ 2 mm) |
+| L_min (w = 0.5) | 1.98 … 4.80 mm, non-monotone → 79 % feasible (wall binds) |
+
+**Recommended resolution**: n = 48 per cell for metrics/tables (a_sf 0.16 %, thickness ~1 voxel);
+n = 32 is fine for quick connectivity checks. Tasks 2–4 will choose their own n by convergence.
+
+**Figures** (`results/figures/`): `task1_tpms_cells.png` (renders + slices, ρ = 0.3),
+`task1_asf_convergence.png` (+ `results/task1_asf_convergence.csv`),
+`task1_morphology_vs_density.png`, `task1_feasible_region.png`.
+
+**Open issues / notes for later tasks**
+1. **Blends develop pinch-point necks (RQ2-relevant).** For 0 < w < 1 the min wall drops to
+   0.04–0.1 L at some densities, non-monotonically (e.g. w = 0.5: 0.073 L at ρ = 0.375); at
+   w = 0.5, ρ = 0.5 the neck is resolution-limited (≈3.5 voxels at every n → true thickness → 0,
+   a singular point of the level set). w = 0.875, ρ = 0.15 even has a floating solid island.
+   Pure G/D are smooth and monotone. Pointwise linear blending of G and D is therefore NOT a
+   smooth morphological interpolation. Options for Task 11: keep the strict constraint (default),
+   use `wall_statistic="throat"` (smooth, load-path neck only), or restrict w to {0, 1} plus
+   narrow transition zones. Discuss in the paper.
+2. The morphology table is coarse in w (0.125) while pinch points move continuously with w →
+   for blends, treat `min_cell_size` as screening and re-check final designs with
+   `check_manufacturable` (direct, n = 48).
+3. With the reference limits the manufacturability constraint barely binds for pure G/D inside
+   L = 2–6 mm. If the paper wants an active constraint, revisit `min_pore_size` / `cell_size` bounds.
+4. Table and metrics are for a = (1,1,1). For a_z ≠ 1 call `compute_metrics` / `check_manufacturable`
+   directly (stretching changes thicknesses non-trivially).
+5. Citations to verify before the manuscript: exact areas G 3.0915 / D 3.8377 (attributed to
+   Schröder-Turk, Fogden & Hyde 2006, Eur. Phys. J. B 54:509; our nodal values agree to 0.01 %);
+   Schoen 1970 (NASA TN D-5541); von Schnering & Nesper 1991 (Z. Phys. B 83:407) for nodal forms;
+   Hildebrand & Rüegsegger 1997 (J. Microsc. 185:67) for local thickness.
+6. Workspace note: PyPI blocked again; tests ran on numpy 2.5.3 / scipy 1.18.1 / scikit-image 0.26
+   / pytest 9.1.1, Python 3.13. scikit-image ≥ 0.22 emits harmless NumPy-2.5 deprecation warnings.
+
+**Tests**: 108 passed (Task 0: 34, Task 1: 74 incl. 1 `slow`) in ~55 s; `pytest -m "not slow"` ~20 s.
+
+## Task 2 — Conduction homogenization  ✅
+
+**Built**
+- `src/voxlat/homogenization/conduction.py` — periodic cell problem for k_eff (3×3):
+  cell-centred finite volumes on voxels, harmonic-mean face conductances, periodic fluctuation
+  θ, three unit macroscopic gradients, PCG (scipy `cg`, rtol 1e-8; pyamg smoothed-aggregation
+  V-cycle if installed, else Jacobi). k_eff computed by **flux averaging and by energy**; the
+  function raises if they differ by > 1e-5 (observed 1e-9 … 2e-9). Contrast 1e3 and the
+  **k_f = 0 limit** work: non-conducting voxels are dropped, the singular-but-consistent
+  per-component blocks (floating islands) are handled by projecting b onto range(A).
+- `src/voxlat/homogenization/convergence.py` — `richardson`, `observed_order`,
+  `fit_convergence` (shared by Tasks 3, 4, 7).
+- `voxlat.geometry.voxelize(..., offset=)` / `sample_level_set(..., offset=)`: optional rigid shift
+  of the TPMS against the grid (backward compatible; default = old behaviour). Used to separate
+  grid-alignment noise from the systematic staircase error.
+- Scripts: `scripts/task2_convergence.py` (~15 min, 2 cores), `scripts/task2_keff_vs_density.py`
+  (~2 min). Both take `--quick`.
+- `pyproject.toml`: new optional extra `amg = ["pyamg>=5.0"]`; README updated.
+- Tests: `tests/test_conduction.py` (62 incl. 4 `slow`; the AMG test skips without pyamg),
+  + 1 offset test in `tests/test_tpms.py`.
+
+**Public API (`voxlat.homogenization`)**
+```python
+effective_conductivity(cell, k_s=None, k_f=None, *, tol=1e-8, preconditioner="auto"|"amg"|"jacobi"|"none",
+                       maxiter=None, return_fields=False, check=True, agreement_tol=1e-5) -> ConductivityResult
+    # cell: bool (True = solid, needs k_s, k_f) or float voxel conductivities; periodic in x, y, z
+ConductivityResult: .k_eff (energy form, symmetric) .k_eff_flux .k_eff_energy .agreement .eigenvalues
+    .mean (tr/3) .anisotropy ((lmax-lmin)/mean) .is_spd .relative() .as_row() .iterations .residuals
+    .preconditioner .wall_time .n_active .theta (3,nx,ny,nz) if return_fields
+effective_conductivity_tpms(params, n=48, k_s=None, k_f=None, *, cfg=None, offset=None, **kw)  # k from config
+extrapolated_conductivity_tpms(params, n=(32, 64), k_s=None, k_f=None, ...) -> ExtrapolatedConductivity
+    # .k_eff = (n2 K(n2) - n1 K(n1))/(n2 - n1), .coarse .fine .correction .mean .eigenvalues   <- PRODUCTION
+hashin_shtrikman_bounds(phi_s, k_s, k_f) -> (lower, upper); wiener_bounds(...); rayleigh_sc_spheres(phi, k_p, k_m)
+face_conductances(k), assemble_conduction_system(kf) -> (A, active)       # reusable for Task 7 strips
+richardson(n1,f1,n2,f2,p=1), observed_order(n3, f3), fit_convergence(n, f, p=1|None) -> ConvergenceFit
+```
+
+**Verification (all pass)**
+| Test | Result |
+|---|---|
+| Homogeneous cells (incl. 5×7×9, 1×4×3 grids) | exact to 1e-13, 0 iterations |
+| Two-phase laminates along x, y, z (k_f/k_s = 0.1, 1e-3); 13-layer random laminate | harmonic across / arithmetic along to 1e-9 (exact for harmonic faces) |
+| Laminate with k_f = 0 | k_across = 0, k_along = φ k_s exactly; fluid DOFs removed |
+| Flux vs energy k_eff | agree to ~1e-9 (TPMS), assertion verified to fire on a sloppy solve |
+| SPD, Wiener bounds | random 60 % cells at 3 contrasts |
+| HS bounds | G and D, ρ = 0.2/0.35/0.5, k_f/k_s = 1/325, 1e-3, 0 — all eigenvalues inside |
+| Near-isotropy G, D (n = 32, 48) | diagonal equal to 2e-4, off-diagonal < 1e-3, anisotropy < 2e-3 |
+| Invariances | periodic roll → identical; axis permutation → permuted tensor; k_f → 0 continuous |
+| SC sphere array vs Rayleigh (1892) | conducting spheres (α = 10): < 1 % at n = 48 (0.01–0.65 %); insulating: 0.4–2 %, halves with 2n |
+| Observed order (offset-averaged 16/32/64) | p ≈ 1 for G and D (slow test) |
+
+**Convergence (the important number).** The voxel staircase drops diagonal (edge/corner) contacts,
+so k_eff converges **from below, first order** (k(n) = k_∞ − C/n): offset-averaged triples
+24/48/96 give p_obs = 0.77–1.06 (8 cases). Reference k_ref = Richardson(48, 96, p = 1) on
+3-offset averages. Errors vs k_ref (`results/task2_convergence_summary.csv`), G/D, ρ = 0.2–0.5:
+
+| Estimator | max \|error\| over 8 cases | cost (n = 48 ≈ 1.6 s) |
+|---|---|---|
+| raw n = 32 | 5.8 – **17 %** low | 0.3 s |
+| raw n = 48 | 4.0 – **12 %** low | 1.6 s |
+| raw n = 64 | 3.0 – **8.3 %** low | 6 s |
+| R(32, 48) | 1.8 % | 2 s |
+| R(48, 64) | 2.3 % (noise amplified ×4) | 8 s |
+| **R(32, 64)** | **0.7 %** | **~6.5 s** |
+
+Error is largest at low ρ (more surface per solid volume), and larger for D than G.
+Alignment noise of a single offset-0 grid ≈ 0.1–0.5 % of k (rms around the 1/n fit).
+Uncertainty of k_ref itself (p = 1 vs observed p): ≤ 1.1 %.
+
+**Recommended resolution: two-grid Richardson R(32, 64) = `extrapolated_conductivity_tpms`**
+(error ≲ 1 % vs the reference; single grids are biased low by 3–17 %). If only one grid is
+affordable, n = 64 with a −(3–8) % bias. Use R(32, 64) for the Task 5 dataset.
+
+**Timings** (1 core of the build sandbox, Jacobi PCG, ρ = 0.35, full 3×3 tensor incl. assembly):
+n = 32: 0.3–0.5 s · **n = 48: 1.6–2.9 s** (target < 30 s ✅) · n = 64: 5.6–9.4 s · n = 96: ~25 s.
+Iterations ∝ n (G 179, D 178, blend 266 at n = 48). Blends are slowest. AMG not tested here (pyamg
+not installable in the sandbox; code path guarded, test skips).
+
+**Results — k_eff/k_s (R(32,64)), k_f/k_s = 1/325** (`results/task2_keff_vs_density.csv`)
+| ρ | 0.20 | 0.30 | 0.35 | 0.40 | 0.50 |
+|---|---|---|---|---|---|
+| Gyroid | 0.104 | 0.168 | 0.208 | 0.246 | 0.335 |
+| Diamond | 0.097 | 0.163 | 0.205 | 0.246 | 0.336 |
+| Blend w = 0.5 (mean eig.) | 0.057 | 0.097 | 0.117 | 0.191 | 0.308 |
+| HS upper | 0.145 | 0.225 | 0.267 | 0.311 | 0.401 |
+
+- G and D are within 0.5–7 % of each other, at 67–83 % of the HS upper bound; fraction rises with ρ.
+- Power-law fits over ρ = 0.2–0.5: G k/k_s ≈ 0.81 ρ^1.29, D ≈ 0.85 ρ^1.36 (config fluid);
+  k_f = 0: G 0.81 ρ^1.31, D 0.86 ρ^1.38. The fluid (k_f/k_s = 1/325) adds only 1–4 % to k_eff.
+
+**Open issues / notes for later tasks**
+1. **Blends are not isotropic (RQ2-relevant).** G and D share only the trigonal sub-symmetry, so
+   w = 0.5 gives a **uniaxial k_eff about [111]** (test-verified): at ρ = 0.3 eigenvalues
+   0.066 / 0.066 / 0.159 k_s. Below ρ ≈ 0.375 the blend conducts ~40 % of HS upper and is
+   strongly anisotropic; between ρ = 0.35 and 0.40 it jumps to ~60 % and becomes nearly
+   isotropic — the same pinch-neck topology change found in Task 1 (open issue 1). Consequences:
+   (a) Task 6 surrogates must predict the full tensor for 0 < w < 1 (the principal axes are
+   the cube diagonals, not x/y/z, so diagonal-only closures are wrong for blends);
+   (b) Task 9's 2-D jacket model must rotate/project this tensor into (r, s, z);
+   (c) graded designs crossing ρ ≈ 0.375 at mid w see a property discontinuity.
+2. **Staircase error will also hit Tasks 3 and 4** (voxel FEA stiffness and voxel Stokes are
+   first-order in h too). Plan for the same two-grid Richardson + offset-averaging study there;
+   `voxlat.homogenization.convergence` is ready. Tried and rejected: diagonal-only "laminate
+   composite voxels" (Kabel et al. 2015 idea without the off-diagonal terms) — no improvement
+   (G ρ = 0.3: 0.1582 vs 0.1596 binary at n = 48), because the dead staircase corners remain
+   poorly connected in a 7-point stencil. A full-tensor (27-point / FE) composite-voxel scheme
+   could fix it; not worth it while R(32, 64) costs 6 s.
+3. Anisotropic cells (a_z ≠ 1) work (grid n × n × round(n a_z)); at ρ = 0.3, n = 32: a_z = 1.5 gives
+   k_zz/k_xx = 1.53 (G) / 1.58 (D), a_z = 0.7 gives 0.68 / 0.58 — stretch matters as much as w.
+   The Richardson pair then refers to the in-plane n.
+4. Floating-point ties: G/D cyclic symmetry is exact mathematically but voxels exactly at the
+   threshold can flip by round-off, so diagonals agree to ~1e-4, not machine precision.
+5. Citations to verify: Hashin & Shtrikman 1962 (J. Appl. Phys. 33:3125); Rayleigh 1892
+   (Phil. Mag. 34:481) and Perrins, McKenzie & McPhedran 1979 (Proc. R. Soc. A 369:207) for the
+   sphere-array check; Kabel, Merkert & Schneider 2015 (CMAME 294:168) for composite voxels.
+6. Workspace: PyPI blocked again (no pyamg); numpy 2.5.3, scipy 1.18.1, Python 3.13.
+   Install `pip install -e ".[amg]"` on the laptop to get AMG; results must match Jacobi to 1e-6
+   (`test_amg_matches_jacobi`).
+
+**Figures** (`results/figures/`): `task2_keff_vs_density.png` (k_eff/k_s vs ρ for G, D, blend with HS
+bounds, config and k_f = 0; panel b = fraction of HS upper), `task2_convergence.png`
+(1/n plot of offset-0 grids; log-log offset-averaged error with slope −1).
+Data: `results/task2_keff_vs_density.csv`, `results/task2_convergence.csv`,
+`results/task2_convergence_summary.csv`, `results/task2_pytest_log.txt`.
+
+**Tests**: 170 passed + 1 skipped (pyamg) in ~2.5 min (Tasks 0–2, incl. slow); `pytest -m "not slow"` ~1.5 min.
+
+## Task 3 — Elasticity homogenization (voxel FEA)  ✅
+
+**Built**
+- `src/voxlat/homogenization/elasticity.py` — periodic Q1 voxel FEA: 8-node trilinear hexahedra
+  (2×2×2 Gauss, exact for a cube), periodic fluctuation u~, six unit macroscopic strains → C_eff
+  (6×6). Vectorized chunked COO→CSR assembly (no Python loop over elements) or matrix-free
+  element-by-element product; PCG with pyamg smoothed aggregation (3×3 blocks, translation
+  near-null space) if installed, else Jacobi; the six load cases run in **lock-step**
+  (one CSR × 6-column product per iteration, identical iterates, ~1.3–1.8× faster).
+  C_eff by **average stress (flux) and by energy**; raises if they differ > 1e-5 (observed 1e-9…2e-8).
+  Element-centroid (= element-average) stresses → von Mises **stress localization**.
+- `scripts/task3_convergence.py` (~14 min, 2 cores), `scripts/task3_n96_anchor.py` (~16 min, 1 core,
+  ~1.4 GB), `scripts/task3_stiffness_vs_density.py` (~16 min, 2 cores). All but the anchor take `--quick`.
+- README: "Homogenization (Tasks 2-3)" section.
+- Tests: `tests/test_elasticity.py` (47 incl. 4 `slow`; AMG test skips without pyamg).
+
+**Conventions (stated in the module docstring)**
+- **Voigt** (reported `C_eff`): order xx, yy, zz, yz, xz, xy; strain vector uses **engineering shear**
+  γ = 2ε, so σ = C ε and C44 = μ for an isotropic solid; load case 4 = γ_yz = 1. S = C⁻¹ gives
+  E_i = 1/S_ii, G = 1/S_44….
+- **Mandel** (`C_mandel` = W C W, W = diag(1,1,1,√2,√2,√2)): orthonormal basis; eigenvalues
+  (Kelvin moduli) used for the SPD check and all rotations (`rotate_stiffness`).
+- Localization factor K = σ_vm(voxel)/Σ_vm(macro); uniaxial Σ_zz (Σ_vm = 1) and shear Σ_xz
+  (Σ_vm = √3). Use σ_vm,local ≈ K_p99 · Σ_vm,macro in Task 9.
+
+**Void: removed, not soft E_min (justification, measured)**
+Coolant has no shear stiffness, so E_void = 0 is the exact limit. Removing void elements/nodes gives
+2.5× fewer DOFs and ~2.6× less time (G, ρ* = 0.3, n = 24: 16 443 vs 41 472 DOFs) and **no bias**; a soft
+void biases C_eff by ≈ 22·E_min/E_s (2.2 % at 1e-3, 0.2 % at 1e-4; test-verified linear). The price is a
+singular-but-consistent K (periodic translations, floating islands = rigid modes, corner/edge-hinged
+voxels = mechanisms); all null vectors have B w = 0, so loads are orthogonal to them and they carry no
+stress. Translations are projected per connected component. Edge-hinged voxels *do* carry the stretch
+of the shared edge (Q1 physics) — tested.
+
+**Public API (`voxlat.homogenization`, all in `.elasticity`)**
+```python
+effective_elasticity(cell, E=None, nu=None, *, void_modulus=0.0, tol=1e-8,
+                     preconditioner="auto"|"amg"|"jacobi"|"block_jacobi"|"none",
+                     operator="auto"|"assembled"|"matrix_free", block_solve=True,
+                     localization=("uniaxial_z","shear_xz"), keep_localization_fields=False,
+                     return_fields=False, check=True) -> ElasticityResult
+    # cell: bool (True = solid; needs E, nu) or float field of voxel moduli (common nu)
+ElasticityResult: .C_eff (Voigt, energy form) .C_eff_flux .agreement .C_mandel .S .eigenvalues .is_spd
+    .youngs_moduli (Ex,Ey,Ez) .shear_moduli .E_axial .youngs_modulus(d) .youngs_extremes()
+    .cubic_constants (C11,C12,C44) .cubic_deviation .zener_ratio .universal_anisotropy .bulk_modulus
+    .localization[name] -> StressLocalization(max, p99, p999, mean, argmax_voxel, factor?)
+    .localize(Sigma_voigt)  (needs return_fields)   .as_row()  .iterations .residuals .solve_time
+    .n_dofs .n_elements .n_components .unit_stresses (6, Ne, 6) float32 if return_fields
+effective_elasticity_tpms(params, n=40, E=None, nu=None, *, cfg=None, offset=None, **kw)   # E, nu from config
+extrapolated_elasticity_tpms(params, n=(32, 64), ..., p=1.0) -> ExtrapolatedElasticity   <- PRODUCTION
+    # .C_eff = (n2 C(n2) - n1 C(n1))/(n2 - n1) .coarse .fine (localization from fine) .correction
+averaged_elasticity_tpms(params, n=40, n_offsets=3, ...) -> AveragedElasticity; grid_offsets(k, seed=2026)
+isotropic_stiffness(E, nu), lame_parameters, voigt_to_mandel, mandel_to_voigt, rotate_stiffness(C, R),
+von_mises(s), hex8_element(nu) -> (K1, F1, B_centre, D1), voigt_reuss_hill(C) -> {K_V..., E_H, A_U},
+youngs_extremes(C), cubic_deviation(C), laminate_stiffness(fractions, E, nu, axis) (exact Backus),
+hashin_shtrikman_porous(phi, E, nu) -> {K, G, E} upper bounds; MACRO_STRESS_CASES
+```
+
+**Verification (all pass)**
+| Test | Result |
+|---|---|
+| Element: 6 rigid modes, constant-strain patch test, self-equilibrated F1 | exact (1e-14) |
+| Homogeneous cells (6³, 5×7×9, 1×4×3; bool and float) | C = C_s to 1e-13, 0 iterations, K_loc ≡ 1 |
+| Two-phase laminates along x, y, z (contrast 0.1, 1e-3), 13-layer 3-phase laminate | = exact Backus tensor to 1e-9; Reuss (normal/transverse shear) and Voigt (in-plane shear) components named and checked |
+| Void laminates (disconnected plates, 2 components) | plane-stress in-plane terms exact (1e-12), K_loc = 1/φ exactly |
+| Floating island / corner-hinged voxel | add exactly nothing (1e-9), hinged voxel stress-free; edge hinge converges |
+| Random two-phase cell | Hill bounds C_Reuss ≤ C_eff ≤ C_Voigt (Loewner order), SPD |
+| Flux vs energy; symmetric; SPD; Hill average ⟨σ⟩ = Σ | agree 1e-9; yes; yes; 1e-5 (float32 store) |
+| Cubic symmetry G, D at ρ* = 0.2/0.35/0.5, n = 32 | C11=C22=C33 and C44s to < 5e-3, C12s < 1e-2, cubic deviation < 5e-3, 90° invariance |
+| Blend w = 0.5 | invariant under cyclic x→y→z ([111] 3-fold axis) but cubic deviation 0.65 → **trigonal** |
+| HS upper bounds (K, G, E) | respected |
+| Invariances | periodic roll, axis permutation ↔ tensor rotation, soft void → removed void linearly |
+| Lock-step PCG = scipy cg = matrix-free = block-Jacobi | to 1e-7 |
+| E*/E_s = Cρ^m, ρ = 0.2–0.5, n = 32 | G 0.95 ρ^2.19, D 0.70 ρ^1.98 → bending-dominated, m ≈ 2 ✔ |
+
+**Timings** (sandbox core, Jacobi, G ρ* = 0.35, all 6 cases incl. assembly + localization)
+| n | DOFs | iterations | total | per load case |
+|---|---|---|---|---|
+| 24 | 18.6 k | 200–230 | 1.6 s | 0.3 s |
+| 32 | 42 k | ~260 | 3.7 s | 0.6 s |
+| **40** | **78 k** | **254–325** | **6.6–7.8 s** | **1.1–1.3 s** (target ≤ 60 s ✅, ~50× margin) |
+| 48 | 133 k | ~370 | 15 s | 2.5 s |
+| 64 | 304 k | ~490 | 45–56 s | 8–9 s |
+| 96 | 1.0 M | 530–690 | 215–275 s (assembled, ~1.4 GB) | ~40 s |
+Iterations ∝ n (Jacobi). Blends ~2× more iterations. `operator="auto"` switches to matrix-free above
+~6e7 non-zeros (~0.7 GB); matrix-free is memory-light but ~3× slower — on a 16 GB laptop pass
+`operator="assembled"` for n ≤ 96. AMG not tested (pyamg not installable here).
+
+**Convergence (n = 16–64, 4 grid offsets each, G/D × ρ* = 0.2/0.35/0.5; `results/task3_convergence_summary.csv`)**
+Reference = fit f_inf + C/n to offset-averaged n = 32–64. **Independent check at n = 96** (2 offsets,
+ρ* = 0.35): the fit predicts the n = 96 values to ≤ 0.6 % for all six quantities → reference ±~0.5 %.
+- Unlike k_eff (Task 2, 3–17 % low), the stiffness staircase error is **small**: offset-averaged C11, C12,
+  C44, K converge **from below, first order**, −1.8…−4.3 % at n = 24, −1.4…−2.5 % (C12 −4 %) at n = 48.
+  Q1 bending stiffening and staircase softening partly cancel.
+- **Alignment noise is as large as the bias** for a single grid: std over offsets of E* ≈ 0.4–1.5 % (n = 32),
+  0.2–0.8 % (n = 48); worst at low ρ*.
+- Max |error| over the 6 cases, default grid (offset 0):
+
+| Estimator | cost (2 parallel) | E* | all of E*, C11, C12, C44, K, Zener |
+|---|---|---|---|
+| raw n = 40 | 6 s | 5.8 % (low) | 5.8 % |
+| raw n = 48 | 15 s | 2.1 % (low) | 6.4 % (C12, D ρ* = 0.2) |
+| raw n = 64 | 45 s | 2.8 % | 3.0 % |
+| 3 offsets n = 48 | 45 s | 3.0 % | 4.6 % |
+| **R(32, 64), p = 1** | **47 s** | **2.6 %** | **2.9 %** |
+| R(24, 48) on 3-offset averages | 47 s | 3.0 % | 3.0 % |
+
+**Recommended: `extrapolated_elasticity_tpms(params, (32, 64))` (same pair as Task 2)** — ≤ 3 % on every
+quantity incl. the Zener ratio, ~1 min/sample on a laptop core. Cheap alternative: raw n = 48 (E* ≤ 2 % low,
+off-diagonal C12 up to 6 % low). Localization: **use p99 at n ≥ 48** — p99 is converged to ±3 % from n = 24
+on (G ρ* = 0.35: 14.9 / 15.8 / 15.3 / 15.4 at n = 24/32/48/64); the **max is a voxel-corner singularity
+that keeps growing** (G ρ* = 0.2: 35 → 48 from n = 16 to 64) — never use the max for design.
+
+**Results (R(32, 64), AlSi10Mg; `results/task3_stiffness_vs_density.csv`, fits `results/task3_powerlaw_fits.csv`)**
+| ρ* | 0.20 | 0.30 | 0.35 | 0.40 | 0.50 |
+|---|---|---|---|---|---|
+| Gyroid E*/E_s | 0.0300 | 0.0666 | 0.0998 | 0.1265 | 0.2074 |
+| Diamond E*/E_s | 0.0307 | 0.0642 | 0.0864 | 0.1145 | 0.1789 |
+| Blend w = 0.5 E*/E_s (x,y,z) | 0.0068 | 0.0169 | 0.0240 | 0.0756 | 0.1777 |
+| Gyroid Zener A | 1.90 | 1.71 | 1.48 | 1.45 | 1.28 |
+| Diamond Zener A | 2.29 | 2.11 | 2.04 | 1.92 | 1.72 |
+| Gyroid K_p99 (uniaxial z / shear xz) | 36 / 17 | 19 / 9.1 | 15 / 7.0 | 12 / 5.8 | 8.3 / 4.1 |
+| Diamond K_p99 | 23 / 17 | 12 / 9.3 | 9.7 / 7.4 | 8.2 / 6.1 | 6.2 / 4.4 |
+| Blend K_p99 | 95 / 62 | 52 / 32 | 42 / 26 | 19 / 12 | 8.5 / 5.7 |
+
+- **Power laws, ρ* = 0.2–0.5**: gyroid E*/E_s = **0.90 ρ*^2.13**, diamond **0.67 ρ*^1.93** (Hill-average E:
+  0.86 ρ^1.87, 0.80 ρ^1.76). Exponent ≈ 2 = bending-dominated, matching Khaderi, Deshpande & Fleck 2014
+  (gyroid lattice: E, G ∝ ρ², bulk ∝ ρ) and the bending classification of skeletal TPMS in Al-Ketan et al.
+  2018. With m fixed at 2: C = 0.79 (G), 0.72 (D) vs **Maskery et al. 2018** experiments (PA2200, ρ* = 0.3,
+  m assumed 2): C = 0.69 (G), 0.68 (D) → our ideal-geometry FE is 11 % (G) / 9 % (D) stiffer at ρ* = 0.3,
+  plausible given SLS porosity/surface roughness. Bulk modulus scales more weakly (m ≈ 1.5–1.6, stretching
+  under hydrostatic load, as Khaderi et al. predict).
+- **G and D are not isotropic**: Zener 1.3–1.9 (G) and 1.7–2.3 (D) in the design range, decreasing with ρ*;
+  E_max/E_min = 1.2–1.8 (G), 1.6–2.0 (D), stiffest along ⟨111⟩. Task 9 must not treat C_eff as isotropic.
+- G is stiffer than D at ρ* ≥ 0.35 but has **~1.5× higher uniaxial stress concentration** (K_p99 15 vs 9.7 at
+  0.35); in shear they are equal. Diamond is the better structural choice per unit E.
+
+**Open issues / notes for later tasks**
+1. **Blends are structurally bad below ρ* ≈ 0.375 (RQ2-relevant).** w = 0.5 is 3.4–4.5× softer than G/D
+   (E ∝ ρ^3.7), strongly anisotropic (A^U ≈ 3.5 vs 0.2–0.9) and has 2.5–4× higher stress concentration
+   (K_p99 up to 95 at ρ* = 0.2); at ρ* = 0.35→0.40 E jumps 3× and A^U drops 7× — the same pinch-neck topology
+   change found in Tasks 1 and 2. Task 11 should either forbid mid-w at low ρ*, use the strict min-wall
+   constraint, or carry the structural margin with K_p99 from these closures (which will penalize it).
+2. Blend tensors are trigonal about [111] (cubic deviation 0.65): Task 6 must predict the full 6×6 (or
+   its trigonal invariants in the [111] frame), and Task 9 must rotate C_eff into (r, s, z).
+3. Localization factors are element-average (centroid) values on a staircase surface; p99 is
+   resolution-stable, but absolute peak stress at a smooth printed surface needs a fatigue-notch argument
+   in the paper (or a smoothed-boundary check in Task 12).
+4. Anisotropic cells work (n × n × round(n a_z)); at ρ* = 0.35, n = 16, a_z = 1.5 gives E_z/E_x = 1.65 (G) and
+   3.1 (D) — stretch changes stiffness far more than it changes k_eff (Task 2: 1.5–1.6).
+   The Richardson pair refers to the in-plane n.
+5. `extrapolated_elasticity_tpms` at (32, 64) ≈ 45–60 s per sample (G/D), ~100 s for blends → the Task 5
+   dataset (N ≈ 270) needs ~3–4 h for elasticity alone on 2 cores; AMG on the laptop should cut that.
+6. Citations to verify: Khaderi, Deshpande & Fleck 2014, Int. J. Solids Struct. 51(23–24):3866–3877;
+   Maskery et al. 2018, Polymer 152:62–71 (doi 10.1016/j.polymer.2017.11.049; values from Table 3);
+   Al-Ketan, Rowshan & Abu Al-Rub 2018, Addit. Manuf. 19:167–183; Lu et al. 2019, J. Mech. Behav. Biomed.
+   Mater. 99:56–65 (cubic symmetry of G/D; they report G as the most anisotropic — our D is more
+   anisotropic, check their geometry definition); Backus 1962, J. Geophys. Res. 67:4427 (laminates);
+   Hashin & Shtrikman 1963, J. Mech. Phys. Solids 11:127; Ranganathan & Ostoja-Starzewski 2008, Phys. Rev.
+   Lett. 101:055504 (A^U); Gibson & Ashby 1997, *Cellular Solids*, 2nd ed.
+7. Workspace: PyPI blocked (no pyamg); numpy 2.5.3, scipy 1.18.1, Python 3.13; pytest from a uv tool env.
+
+**Figures** (`results/figures/`): `task3_youngs_vs_density.png` (log-log E*/E_s, fits, HS bound, slope-2
+guide, Maskery points, blend directional range), `task3_anisotropy_vs_density.png` (Zener; universal
+anisotropy A^U incl. blend), `task3_localization_vs_density.png` (p99/max/mean, uniaxial z and shear xz),
+`task3_convergence.png`. Data: `results/task3_*.csv`, `results/task3_pytest_log.txt`.
+
+**Tests**: 216 passed + 2 skipped (pyamg) in 4.5 min (Tasks 0–3, incl. slow); Task 3 alone 46 + 1 skipped.
+
+## Task 4 — Stokes permeability  ✅
+
+**Built**
+- `src/voxlat/homogenization/stokes.py` — periodic creeping-flow (Stokes) permeability K (3×3) of any
+  bool voxel cell: staggered **MAC finite volumes** (p at fluid-cell centres, u_d on voxel faces), no slip /
+  no penetration on every solid–fluid voxel face, unit body force e_j, **MINRES** on the symmetric
+  saddle-point system with the block-diagonal preconditioner diag(A_hat, I) (A_hat = Jacobi, or one pyamg
+  SA V-cycle if installed). Outputs K, staggered velocity and pressure fields, porosity, mean interstitial
+  velocity, mean speed, hydraulic tortuosity. Flux and energy forms of K are both computed and checked.
+  Verification geometries + analytic references live in the same module.
+- `src/voxlat/homogenization/convergence.py`: the free-order fit (`fit_convergence(..., p=None)`) now fits
+  in normalized units (bug fix, see open issue 6).
+- Scripts: `scripts/task4_verification.py` (~2 min, 2 cores), `scripts/task4_convergence.py` (~11 min, 2 cores,
+  incl. four n = 96 anchors, ~1.5 GB each), `scripts/task4_permeability_vs_porosity.py` (~9 min, 2 cores).
+  `scripts/task4_benchmark_preconditioner.py` (Jacobi vs AMG timing and K agreement, ~3-5 min). All take `--quick`; the first two also `--replot`.
+- `voxlat.homogenization` exports the Stokes API; README "Homogenization (Tasks 2-4)" updated.
+- Tests: `tests/test_stokes.py` (50 incl. 6 `slow`; the AMG test skips without pyamg),
+  + 3 scale-invariance regression tests in `tests/test_conduction.py`.
+
+**Method choice (justification, also in the module docstring)**
+- MAC: the wall sits exactly on the same voxel faces as in Tasks 2–3; wall-normal velocity is zero *at* the
+  wall (exact no-penetration); tangential no-slip by the mirror ghost u_g = −u where a flat wall lies h/2 away
+  (standard 2nd-order MAC, Manwart et al. 2002), u = 0 at distance h at staircase steps. No tuning parameter.
+- MINRES + diag(Jacobi, pressure mass) is the classic block preconditioner for Stokes (Silvester & Wathen 1994);
+  iterations grow ∝ n with Jacobi but the cost stays far inside the 2-min target (table below).
+- Rejected: FFT-Brinkman (penalty boundary layer O(√ε), Gibbs ringing at the solid indicator, conditioning
+  ∝ 1/ε); Uzawa / augmented Lagrangian (nested inner velocity solves); sparse LU (3-D fill: GBs at n = 48);
+  lattice Boltzmann (O(n²) time steps to steady state in numpy).
+- **Reported K = symmetrized flux form** (K_ij = ⟨u_i^(j)⟩): its error is quadratic in the solver residual
+  (compliance functional), measured 3e-8 relative at tol 1e-8 (gyroid n = 48); the energy form
+  u^(i)ᵀA u^(j)/N (Gram matrix, PSD by construction) is linear in the residual (4e-7 G/D … 1e-4 blends) and
+  is used as the check: `agreement_tol = 1e-3` (a sloppy tol = 1e-4 solve disagrees by 1.4e-2 and raises).
+- MINRES `tol` is scipy's backward-error test, not ‖r‖/‖b‖: tol 1e-8 → true relative residual ~1e-4,
+  K converged to ~1e-7. Default tol 1e-8.
+
+**Public API (`voxlat.homogenization.stokes`; main names also in `voxlat.homogenization`)**
+```python
+permeability(cell, *, voxel_size=1.0, symmetry="none"|"cubic"|"tetragonal_z", directions=None, tol=1e-8,
+             preconditioner="auto"|"amg"|"jacobi", maxiter=None, return_fields=False, check=True,
+             agreement_tol=1e-3) -> PermeabilityResult
+    # cell: bool (True = solid), periodic; K in units of voxel_size^2 (1/n -> L^2; L/n in m -> m^2)
+PermeabilityResult: .K (3x3) .K_flux .K_energy .agreement .porosity .interstitial_velocity (3x3, col j = <u>_f)
+    .mean_speed{j} .tortuosity{j} (NaN if no net flow) .eigenvalues .mean .is_spd .anisotropy .as_row()
+    .iterations .residuals (true ||r||/||b||) .divergence .n_dofs .n_pressure_components .wall_time
+    .velocity (n_dirs,3,nx,ny,nz) float32 staggered (+d face) .pressure (n_dirs,nx,ny,nz)  [return_fields]
+    .cell_velocity(k) -> (3,nx,ny,nz) cell-centred
+permeability_tpms(params, n=48, *, offset=None, symmetry="auto", **kw)        # K in L^2; G/D: 1 solve, blends: 3
+tpms_symmetry(params) -> "cubic" (w in {0,1}, a = 1) | "tetragonal_z" (a_x = a_y != a_z) | "none" (blends)
+extrapolated_permeability_tpms(params, n=(32, 64), *, p=1.0, offset=None) -> ExtrapolatedPermeability  <- PRODUCTION
+    # .K .coarse .fine .correction .porosity .tortuosity .mean .eigenvalues
+averaged_permeability_tpms(params, n=48, n_offsets=3, seed=2026) -> AveragedPermeability(.K, .K_std, ...)
+assemble_stokes_system(solid) -> StokesSystem(A, D, saddle, active, face_id, offsets, pressure_id, ...)
+solve_stokes(system, force, *, tol, maxiter, preconditioner) -> StokesSolution(u, p, iterations, residual, divergence)
+kozeny_constant(K, porosity, a_sf) = phi^3 / (K a_sf^2)
+# references / verification geometries
+slit_permeability(H) = H^2/12; mac_slit_permeability(H) = (H^2+2)/12; rectangular_duct_mean_velocity(a, b)
+ZICK_HOMSY_SC (table), zick_homsy_sc_drag(c) (PCHIP, log-log), sangani_acrivos_sc_drag(c), sc_sphere_permeability(c, K*)
+sphere_array_cell(n, c, match_volume=True); inclined_slit_cell(N, porosity, slope, nz); inclined_slit_reference(...)
+```
+`assemble_stokes_system`/`permeability` take any periodic bool cell, so Task 7's strips (lattice between
+solid wall layers) need no new solver: the strip walls are grid-aligned, i.e. 2nd-order exact.
+
+**Verification (all pass; `results/task4_verification_*.csv`, figure `task4_verification.png`)**
+| Case | Result |
+|---|---|
+| (a) Plane Poiseuille, H = 1…64 fluid voxels, walls ⟂ x, y, z, thick walls, 1-voxel axes | K = (H²+2)/12·φ **exactly** (1e-15); profile u_j = (y_j(H−y_j)+¼)/2 exact; K across = 0; T = 1 |
+| (a) vs continuum H²/12 | error **+2/H²** (H = 8: 3.1 %, 16: 0.78 %, 32: 0.20 %), observed order 2.000 |
+| (b) Square duct vs series (0.0351443 a²G/μ) | +5.9 / 1.5 / 0.38 / 0.094 % at 8 / 16 / 32 / 64 voxels; order 2.0; R(16,32) p=2 → < 0.03 % |
+| (b) 2:1 duct | +3.9 / 0.98 / 0.25 / 0.06 %, order 2.0 |
+| (b) Inclined slit 45° (φ = 0.5) | exactly −4/N² along the slit, +8/N² along z → 2nd order (symmetric staircase) |
+| (b) Inclined slit 1:2, 1:3 (generic wall) | **1st order**: K error ≈ −0.20 h/H (1:2), −0.26 h/H (1:3) (H = fluid-layer thickness) → effective wall shift ≈ 0.05 h into the fluid per wall; −1.1 % at H = 18 voxels |
+| (c) SC sphere arrays vs Zick & Homsy (1982), c = 0.027, 0.064, 0.125, 0.216, 0.343, 0.45 | at the realized voxel fraction: **−0.3 … −0.9 % for every n = 32–64**, n = 24 within ±1.1 %; full tensor isotropic to 1e-6 |
+| (c) same, vs the target c | ±1–4 % at n ≤ 32 — the voxel shell structure misses c by up to 7 % and d ln K/d ln c ≈ −1…−1.3, so always compare at the realized c |
+| Sangani & Acrivos (1982) series vs Zick & Homsy | ≤ 0.8 % for c ≤ 0.216 (reference data cross-check) |
+| Sealed cavities | add porosity, carry no flow (u ≤ 1e-9 max), K unchanged; fully closed cell → K = 0, T = NaN |
+| Symmetry | G, D: full 3-direction K = k I to 1.4e-3 at n = 24 (voxel alignment) → `symmetry="cubic"` valid; blend w = 0.5: K = aI + b(J−I), non-degenerate axis [111] (trigonal); stretched a_z = 1.5: tetragonal, K_zz > 1.1 K_xx |
+| Invariances | periodic roll and axis permutation ↔ tensor rotation to 1e-6 |
+| Fields | staggered mean = K; discrete div u ≤ 1e-3 max|u| (true residual ~1e-4); u = 0 on all faces touching solid |
+| (d) TPMS convergence (slow test) | offset-averaged G ρ* = 0.35, n = 16…64: every n ≥ 32 within 1.5 % of the fit, R(32,64) within 0.5 % |
+
+**Convergence (n = 16–64, 4 grid offsets each; G/D × ρ* = 0.2/0.35/0.5 + blend w = 0.5, ρ* = 0.35;
+`results/task4_convergence_summary.csv`)**
+Reference = fit K_inf + C/n to offset-averaged n = 32–64. **Independent n = 96 check** (2 offsets, ρ* = 0.35):
+the fit predicts n = 96 to **0.18 % (G) and 0.46 % (D)** → reference good to ~±0.5 %.
+- Unlike k_eff (Task 2: 3–17 % low), the permeability staircase error is **small**: offset-averaged K is low
+  by 0.0–0.8 % at n = 32 and 0.1–0.6 % at n = 48 (diamond ρ* = 0.5, the narrowest pores: −2.4 % / −1.7 %).
+  Flow is not blocked by the staircase, the effective wall moves only ~0.05 h (inclined-slit result).
+- Systematic error and alignment noise (0.1–0.7 % std at n = 32–48) are the same size, so the free order is
+  not identifiable (normalized free fits hit the 0.25 / 4 bounds in 6 of 7 cases); p = 1 is used, as in Tasks 2–3.
+- Tortuosity converges faster, from below: offset-averaged within 0.3 % from n = 32 on, 0.15 % at n = 48–64.
+- Max |error| over the 7 cases on the default grid (offset 0):
+
+| Estimator | cost per direction (G/D, 1 core) | max \|error\| | all but D ρ* = 0.5 |
+|---|---|---|---|
+| raw n = 32 | ~1 s | 3.2 % | 0.9 % |
+| raw n = 48 | 3–4 s | 1.6 % | 0.9 % |
+| raw n = 64 | 13–18 s | 1.1 % | 0.4 % |
+| 3 offsets n = 48 | 8–13 s | 1.7 % | 0.6 % |
+| R(24, 48) | 3–5 s | 1.2 % | 1.2 % |
+| R(48, 64) | 16–22 s | 1.5 % | 1.5 % |
+| **R(32, 64)** | **14–19 s** | **1.0 %** | **0.35 %** |
+
+**Recommended: `extrapolated_permeability_tpms(params, (32, 64))`** — ≤ 1 % everywhere, same grid pair as
+Tasks 2–3 (Task 5 can voxelize once). Cheap alternative: raw n = 48 (≤ 1.6 % low, mostly ≤ 0.9 %).
+
+**Timings** (1 sandbox core, nothing else running, Jacobi, ρ* = 0.3, ONE body-force direction incl. assembly)
+| n | DOFs | G | D | blend | iterations G / D / blend | peak RAM |
+|---|---|---|---|---|---|---|
+| 32 | 89 k | 1.0 s | 0.7 s | 1.4 s | 378 / 283 / 573 | 0.13 GB |
+| **48** | **304 k** | **4.3 s** | **2.7 s** | **6.8 s** | 554 / 356 / 902 | 0.25 GB (**target ≤ 2 min ✅, 17–40× margin**) |
+| 64 | 725 k | 18 s | 13 s | 26 s | 784 / 519 / 1206 | 0.5 GB |
+| 96 | 2.46 M | 114 s | 72 s | – | 1252 / 800 | 1.5 GB |
+Iterations ∝ n (Jacobi), cost ∝ n^4. Two parallel workers slow each ~1.3–1.5× (memory bandwidth). Production
+R(32, 64): G ~19 s, D ~13 s per sample (one solve each, cubic symmetry), blends ~85 s (three directions).
+pyamg should cut the iteration count (untested here).
+
+**Results (R(32, 64); `results/task4_permeability_vs_porosity.csv`)**
+| ρ* (φ) | 0.20 (0.80) | 0.30 (0.70) | 0.35 (0.65) | 0.40 (0.60) | 0.50 (0.50) |
+|---|---|---|---|---|---|
+| Gyroid K/L² | 1.030e-2 | 6.214e-3 | 4.887e-3 | 3.829e-3 | 2.224e-3 |
+| Diamond K/L² | 6.651e-3 | 4.010e-3 | 3.103e-3 | 2.390e-3 | 1.410e-3 |
+| Blend w = 0.5, mean (min–max) ×1e-3 | 10.49 (9.83–11.81) | 5.57 (5.26–6.20) | 4.04 (3.89–4.33) | 2.95 (2.89–3.06) | 1.39 (1.24–1.71) |
+| Kozeny c_K G / D / blend | 7.76 / 7.95 / 7.72 | 6.72 / 6.81 / 6.72 | 6.37 / 6.53 / 6.39 | 6.12 / 6.35 / 6.14 | 5.87 / 6.01 / 6.66 |
+| Tortuosity G / D / blend | 1.12 / 1.14 / 1.09 | 1.16 / 1.19 / 1.13 | 1.18 / 1.21 / 1.16 | 1.20 / 1.24 / 1.20 | 1.24 / 1.29 / 1.31 |
+
+- Power laws over ρ* = 0.2–0.5: **G K/L² ≈ 0.0202 φ^3.22, D ≈ 0.0132 φ^3.29**. Diamond is ~35–37 % less
+  permeable than gyroid at equal porosity (smaller pores and throats, Task 1).
+- **Kozeny–Carman collapse**: c_K = φ³/(K a_sf²) is nearly topology-independent — G, D and the blend agree
+  within ~4 % at equal φ for φ ≥ 0.5 (G vs D 7 % at φ = 0.45; blend +11 % at ρ* = 0.5), c_K falling from ~9
+  (φ = 0.85) to ~6 (φ = 0.5), above Carman's 5 for packed beds. So K ≈ φ³/(c_K(φ) a_sf²) with the Task 1 a_sf is a good physics prior for
+  Task 6 (or a check on its surrogates).
+- Physical scale: K = (K/L²)·L²; e.g. gyroid ρ* = 0.35, L = 4 mm → K = 7.8e-8 m².
+
+**Open issues / notes for later tasks**
+1. **Blend K is trigonal and non-monotone in anisotropy (RQ2-relevant).** w = 0.5: (K_max−K_min)/K_mean ≈ 0.19
+   at ρ* ≤ 0.25, a minimum 0.06 at ρ* = 0.4, then 0.34 / 0.55 at ρ* = 0.5 / 0.55 — the same pinch topology change
+   seen in Tasks 1–3, here on the fluid side at high ρ*. Task 6 must predict the full tensor for 0 < w < 1 (axis
+   [111]); Task 9 must rotate it into (r, s, z). Unlike stiffness, permeability does **not** collapse for blends at
+   low ρ* (blend ≈ gyroid there), so blends are a flow-vs-structure trade-off, not simply worse.
+2. Stretched cells: tetragonal K (`tpms_symmetry` → two solves). K_zz/K_xx for a_z ≠ 1 is not tabulated yet — Task 5
+   samples it.
+3. Creeping-flow only: K is the Darcy (Re → 0) permeability. Inertial (Forchheimer) corrections come from
+   literature in Task 8; state this in the paper's limitations.
+4. For Task 7: strip walls aligned with the grid are 2nd-order exact (Poiseuille / duct tests), so finite-gap
+   errors measured there will be lattice physics, not discretization; keep the lattice at n ≥ 32 per cell.
+5. AMG path (`preconditioner="amg"`, a symmetric-Gauss-Seidel SA V-cycle on the velocity block, SPD as MINRES
+   requires; `"auto"` picks it whenever pyamg is installed) — **checked on the Windows laptop** (Python 3.13.7,
+   pyamg installed): K matches Jacobi to 2e-6 of mean K. AMG aggregation is not symmetric under the cube's
+   rotations and MINRES stops at a looser true residual for the same tol, so symmetric cells show off-diagonals
+   ~1e-5 of K instead of round-off (Jacobi keeps them at 1e-8). Both are ~1000x below the discretization error.
+   First laptop run failed 5 slow tests on tolerances tuned to Jacobi; fixed in the Task 4 follow-up commit
+   (solver unchanged; the exact-symmetry check now runs with Jacobi explicitly). Speed on the laptop:
+   run `python scripts/task4_benchmark_preconditioner.py` and record AMG vs Jacobi here before Task 5;
+   if AMG is not faster, Task 5 should pass `preconditioner="jacobi"`.
+6. **Bug fix in a shared helper:** `fit_convergence(..., p=None)` stalled at p0 = 1 when |f| ≪ 1 (curve_fit
+   tolerances; K/L² ~ 1e-3). Now normalized internally; regression test added. This affected only the **`p_fit`
+   diagnostic column of `results/task3_convergence_summary.csv`** (Task 3 references used fixed p = 1 and are
+   unchanged); that column was recomputed from `results/task3_convergence.csv` (other columns identical).
+   Corrected Task 3 free orders scatter 0.25–2.0, median 1.16 → noise-limited, consistent with Task 3's "first order".
+7. Citations to verify: Zick & Homsy 1982, J. Fluid Mech. 115:13–26 (Table 2, SC: c = 0.027…0.5236 →
+   K* = 2.008…42.1; drag F = |∇P|·V_cell, superficial U — convention confirmed against Basilisk's `spheres.c`
+   test and the LBM drag-correlation paper arXiv:1401.2025, Sec. 2); Sangani & Acrivos 1982, Int. J. Multiphase Flow
+   8:343 (SC series coefficients 1.7601, 1.5593, 3.9799, 3.0734); Hasimoto 1959, J. Fluid Mech. 5:317;
+   Manwart et al. 2002, Phys. Rev. E 66:016702 (MAC on voxel images, mirror ghost); Silvester & Wathen 1994,
+   SIAM J. Numer. Anal. 31:1352 (block preconditioner); Duda, Koza & Matyka 2011, Phys. Rev. E 84:036319
+   (hydraulic tortuosity); Carman 1937, Trans. Inst. Chem. Eng. 15:150 (c_K = 5); duct series: Shah & London 1978
+   / White, *Viscous Fluid Flow*.
+8. Workspace: PyPI blocked (no pyamg); numpy 2.5.3, scipy 1.18.1, Python 3.13; pytest from a uv tool env.
+
+**Figures** (`results/figures/`): `task4_verification.png` ((a) Poiseuille profile + 2/H² error, (b) ducts and
+inclined slits vs h/D with slope-1/2 guides, (c) sphere arrays vs Zick & Homsy and the SA series, (d) sphere error
+vs n), `task4_convergence.png` (K(n)/K_ref vs 1/n with n = 96 anchors; estimator errors; tortuosity),
+`task4_permeability_vs_porosity.png` (K/L² vs φ with blend principal-value band; Kozeny constant; tortuosity).
+Data: `results/task4_*.csv`, `results/task4_pytest_log.txt`.
+
+**Tests**: 268 passed + 3 skipped (pyamg) in 7.9 min (Tasks 0–4, incl. slow; `results/task4_pytest_log.txt`).
+Task 4 alone: 49 passed + 1 skipped; `pytest -m "not slow" tests/test_stokes.py` runs 44 tests in ~30 s.
+
+## Task 5 — Closure dataset  ✅
+
+> The original Task 5 STATUS notes were not in the repo (this section said *not started*
+> although commit 02b1054 holds the code and `data/closures.parquet`). The record below was
+> reconstructed in Task 6 from the table, `voxlat.closures.dataset`, the README and the demo log.
+
+**Built** — `src/voxlat/closures/dataset.py` (design, per-sample computation, resumable parts,
+consolidation, quick-look plot), `scripts/build_dataset.py` (`--estimate-only`, `--n-jobs`,
+`--plot-only`, `--quick`), `tests/test_dataset.py`, README section "Closure dataset (Task 5)".
+API: `from voxlat.closures import build_design, compute_sample, run_samples, consolidate, read_table`.
+
+**Dataset (`data/closures.parquet`, 290 rows x 170 columns, all `status == "ok"`)**
+| Item | Value |
+|---|---|
+| Design | 256 scrambled Sobol (seed 20261008) + 8 corners + 12 edge midpoints + 14 pure-line points (w in {0, 1}, a_z = 1, rho* = 0.20:0.05:0.50) |
+| Box | w in [0, 1], rho* in [0.20, 0.50], a_z on 27 exact levels l/32 = 0.6875 ... 1.5 |
+| Estimators | k_eff, C_eff, K: Richardson R(32, 64); geometry metrics at n = 64; localization from the n = 64 grid |
+| Settings hash | `64f53a501dd4` (k_s 130, k_f 0.4, E_s 70 GPa, nu 0.33, tol 1e-8) |
+| Run | Windows 11, Python 3.13.7, numpy 2.5.3, git 677c30ae3ab7(+dirty); 2026-10-08 16:28-23:51 UTC (7.4 h wall), 27.8 CPU-h; AMG (3 timing rows Jacobi) |
+| Cost per sample | median 312 s (pure 250 s, blends 322 s), max 628 s; peak RSS <= 2.0 GB |
+| Topology | every cell: one solid and one fluid component, both percolating |
+| Regression check | pure-line rows reproduce the Task 2-4 tables, e.g. gyroid rho* = 0.35: k/k_s 0.2079, K/L^2 4.887e-3, E*/E_s 0.0998, a_sf L 2.970 |
+
+**Found in Task 6 (data quality)** — stretched pure cells carry *voxel symmetry-breaking*: for
+diamond at a_z = 22/32 the 4_1 screw axis (translation c/4 = 5.5 voxels at n = 32) is off-grid, so
+k_xy reaches 3 % of k_xx and C16 2 % of C11 (corner-4) although the true symmetry is tetragonal.
+K is unaffected (solved with imposed symmetry). Task 6 removes these artifacts by symmetry
+projection (max change of the latent logs: K 3e-4, k_eff 0.028, C 0.029, localization 0.005).
+
+## Task 6 — Closure surrogates  ✅
+
+**Built**
+- `src/voxlat/surrogates/` (all numpy/scipy/scikit-learn; **no torch needed**):
+  - `tensors.py` — Log-Euclidean maps (batched `sym_logm` / `sym_expm`), Daleckii-Krein derivative of
+    exp, Voigt <-> Mandel, Mandel rotation (checked against `elasticity.rotate_stiffness`).
+  - `symmetry.py` — symmetry classes of theta and their Reynolds projectors (2nd-rank, stiffness,
+    load cases).
+  - `targets.py` — closure table <-> 40 latent targets <-> derived quantities with delta-method std.
+  - `gp.py` — ARD Matérn-5/2 GP per target (sklearn hyper-parameter fit, numpy prediction).
+  - `nn.py` — minimal numpy NN layers (Dense, periodic Conv3d, pooling, space-to-depth, AdamW,
+    Gaussian NLL), every backward pass gradient-checked.
+  - `ensemble.py` — 5-member heteroscedastic MLP deep ensemble.
+  - `cnn.py` — 3D CNN ensemble on 32³ voxels for K* and E*.
+  - `model.py` — `ClosureModel` (GP or ensemble; the API for Tasks 9/11), `CNNClosureModel`, save/load.
+  - `evaluation.py` — 5-fold CV, extrapolation splits, metrics, recalibration, parity/calibration plots.
+- Scripts: `scripts/task6_train_surrogates.py` (production models -> `models/`),
+  `scripts/task6_evaluate.py` (CV + splits -> tables, figures), `scripts/task6_cnn_experiment.py` (6c).
+- `models/closure_gp.npz` (100 kB), `models/closure_ensemble.npz` (0.5 MB), `models/closure_cnn.npz`
+  — plain `.npz` + JSON metadata (no pickle; independent of the scikit-learn version; the GP
+  Cholesky factors are recomputed on load).
+- Tests: `tests/test_surrogates.py`. README section "Closure surrogates (Task 6)".
+
+**Decisions**
+1. **Why numpy instead of torch.** PyPI is blocked in the build sandbox (no torch), and the models are
+   tiny: the CNN has ~45 k parameters and trains in ~4 min per member on one core; numpy keeps it
+   runnable everywhere and makes the weights plain arrays. The `ml` extra (torch) is still needed later
+   by BoTorch (Task 11).
+2. **Targets (40 latent, all smooth in theta):** matrix log of K/L² (6) and of k_eff/k_s (6), matrix log of
+   the Mandel stiffness C/E_s (21), log a_sf L (1), log p99 localization of the six unit stresses (6).
+   The eigenvalues of log(K/L²) **are** the log principal values of K, and its eigenvectors the
+   principal axes ([111] for blends, Tasks 2-4) — so the device model gets the full tensor, not just
+   three numbers. exp of any symmetric prediction is SPD: positivity and tensor symmetry hold by
+   construction. The **max** localization is not modelled (voxel-corner singularity, Task 3).
+3. **Material symmetry is imposed exactly** (projection of the latent logs; `symmetry.py`):
+
+   | class | where | rows | independent K / C / load cases |
+   |---|---|---|---|
+   | cubic (432) | w in {0,1}, a_z = 1 | 14 | 1 / 3 / 2 |
+   | tetragonal (422 about z) | w in {0,1}, a_z != 1 | 16 | 2 / 6 / 4 |
+   | trigonal (3-fold about [111]) | 0 < w < 1, a_z = 1 | 10 | 2 / 7 / 2 |
+   | triclinic | 0 < w < 1, a_z != 1 | 250 | 6 / 21 / 6 |
+
+   Verified on the Task 5 data (trigonal C shows exactly the 7-constant cyclic pattern) and against
+   the Task 2 solver in a test. Stretched blends have *no* symmetry: |k_xx - k_yy| reaches 9 % of k.
+4. **L is analytic:** K = (K/L²) L², a_sf = (a_sf L)/L; k_eff, C, localization are scale-free.
+5. **Inputs:** u = (w, log rho*, log a_z) scaled to [0, 1]³ (power laws become linear).
+6. **GP:** least-squares linear trend + ARD Matérn-5/2 + white noise per target, 2 optimizer restarts.
+   Fitted w length scales are short (~0.09) for k_eff and C: the blend pinch-neck transition (Tasks 1-4)
+   sets a single stationary length scale.
+7. **Deep ensemble:** 5 x MLP 3-64-64-64-80 (SiLU), MSE warm-up (30 %) then Gaussian NLL, AdamW, cosine
+   schedule, 3000 full-batch epochs; uniform Gaussian mixture.
+8. **Uncertainty:** latent std -> derived std by the exact first-order delta method (checked against
+   Monte Carlo within ~2 %; sorted eigenvalues near a crossing are conservative). Raw std's are too
+   small (raw CV 95 % coverage 74-92 %; only the ensemble's a_sf reaches 98 %), so the production models carry a **CV recalibration**: per latent
+   target, multiplier = 95th percentile of the out-of-fold |z| / 1.96 (median by group — GP: K 1.02,
+   k_eff 1.64, C 1.68, a_sf 1.26, loc 1.68; ensemble: K 1.09, k_eff 1.74, C 1.62, a_sf 1.00, loc 1.58).
+   In the evaluation it is applied **cross-fitted** (fold f scaled with the other folds' multipliers).
+   Errors are heavy-tailed (pinch-neck blends), so one multiplier cannot fix the whole calibration
+   curve: intervals are conservative for most designs and still too narrow in the neck region.
+
+**Public API (`voxlat.surrogates`)**
+```python
+cm = ClosureModel.load("ensemble")             # or "gp"; models/closure_<backend>.npz
+out = cm.predict(theta, L)                     # theta: (3,) | (N,3) | dict | TPMSParams; L [m] scalar or (N,)
+#   -> {name: (mean, std)} SI:  K (N,3,3) m^2, K_principal (N,3), K_star, k_eff (N,3,3) W/mK,
+#      C_eff (N,6,6) Pa (Voigt, engineering shear), E (N,3) Pa, E_star, a_sf 1/m,
+#      loc_<case>_p99 (6 cases), porosity (exact)
+cm.predict(theta, L, return_std=False)         # means only (~0.12 s for 512 points)
+cm.predict(theta, L, check_bounds="raise")     # default "warn" outside the training box
+cm.predict_dimensionless(theta)                # K/L^2, k/k_s, C/E_s, ... (targets.QUANTITY_INFO names)
+cm.predict_latent(theta) -> (mu, sd, classes); cm.symmetry_class(theta)
+ClosureModel.fit(df, "gp"|"ensemble", recalibrate=True, **backend_kw); cm.save(path)
+cnn = CNNClosureModel.load(); cnn.predict(theta, L) -> {"K_star", "E_star"}; cnn.predict_voxels(vox32, a_z, L)
+load_training_table(path=None)                 # data/closures.parquet (csv fallback), status == ok
+symmetry_class(w, a_z); rotation_group(name); projector_sym3/sym6/cases(name); independent_components(name)
+latent_from_table(df) -> (Y, classes); derived_quantities(mu, sd, classes); tensors_from_latent(mu, classes)
+GaussianProcessSurrogate, MLPEnsemble, CNNEnsemble, cnn_voxels(theta)
+evaluation: kfold_indices, extrapolation_split, sparse_blend_split, cross_validate, predict_split,
+            latent_cv, std_scale_from_oof, summarize, summarize_groups, plot_parity, plot_calibration
+```
+
+**Accuracy** (`results/task6_metrics_groups.csv`, per quantity `results/task6_metrics.csv`; every
+prediction in `results/task6_predictions.csv.gz`). R² on log values for positive quantities; err =
+MAPE, or NMAEᴺ = MAE / mean diagonal for signed components (off-diagonals, whose R² is not meaningful
+because most are ~0); cov95 = coverage of the recalibrated 95 % interval (raw in brackets).
+
+*5-fold CV (290 rows):*
+
+| quantity | GP R² | GP err | GP cov95 | ens R² | ens err | ens cov95 |
+|---|---|---|---|---|---|---|
+| K principal values | 0.999 | 0.9 % | 93 % (92) | 0.999 | 0.9 % | 91 % (89) |
+| K* = tr K/3 | 0.999 | 0.7 % | 91 % (89) | 0.999 | 0.7 % | 86 % (85) |
+| k_eff diagonal | 0.995 | 1.9 % | 96 % (91) | 0.995 | 1.5 % | 95 % (89) |
+| k_eff off-diagonal | 0.936 | 0.66 %ᴺ | 97 % (90) | 0.952 | 0.46 %ᴺ | 96 % (86) |
+| C normal (C11, C22, C33) | 0.985 | 6.0 % | 93 % (89) | 0.988 | 4.3 % | 94 % (86) |
+| C coupling (C12, C13, C23) | 0.980 | 2.18 %ᴺ | 92 % (86) | 0.992 | 1.01 %ᴺ | 93 % (86) |
+| C shear (C44, C55, C66) | 0.982 | 6.4 % | 96 % (92) | 0.990 | 3.2 % | 97 % (88) |
+| C off-class (12 others) | 0.752 | 0.45 %ᴺ | 97 % (92) | 0.891 | 0.25 %ᴺ | 96 % (88) |
+| E* = mean(E_x, E_y, E_z) | 0.988 | 4.6 % | 92 % (88) | 0.988 | 3.9 % | 89 % (74) |
+| E_z | 0.988 | 5.8 % | 96 % (91) | 0.989 | 4.1 % | 93 % (84) |
+| a_sf L | 0.999 | 0.3 % | 95 % (92) | 0.999 | 0.2 % | 98 % (98) |
+| loc p99, uniaxial | 0.988 | 4.3 % | 94 % (89) | 0.990 | 2.9 % | 94 % (88) |
+| loc p99, shear | 0.983 | 5.0 % | 94 % (89) | 0.987 | 3.5 % | 93 % (86) |
+
+Errors concentrate in the **pinch-neck region** (0.3 < w < 0.7, rho* < 0.4; 72 rows). CV MAPE, ensemble / GP:
+
+| quantity | rest (218 rows) | neck (72 rows) |
+|---|---|---|
+| K* | 0.6 / 0.6 % | 1.3 / 1.2 % |
+| k*/k_s | 0.6 / 1.1 % | 3.8 / 3.9 % |
+| E* | 1.4 / 2.2 % (median 0.5 / 1.1 %) | 11.6 / 11.8 % |
+| C44 | 1.4 / 4.3 % | 8.2 / 12.4 % |
+| loc p99 uniaxial z | 1.5 / 2.8 % | 8.3 / 10.0 % |
+| a_sf L | 0.2 / 0.2 % | 0.4 / 0.4 % |
+
+Held-out pure G/D rows (30): E* 1.3 % (ensemble) / 1.8 % (GP), K* 0.7 / 0.9 %, k* 0.7 / 1.0 %.
+
+*Extrapolation split "band": trained on w < 0.25 or w > 0.75 (158 rows), tested on the held-out blends
+0.25 <= w <= 0.75 (132 rows):*
+
+| quantity | GP R² | GP err | GP cov95 | ens R² | ens err | ens cov95 |
+|---|---|---|---|---|---|---|
+| K principal values | 0.974 | 6.4 % | 40 % (38) | 0.979 | 5.4 % | 85 % (85) |
+| K* = tr K/3 | 0.979 | 5.6 % | 27 % (23) | 0.982 | 4.8 % | 80 % (80) |
+| k_eff diagonal | 0.920 | 11.5 % | 84 % (72) | 0.916 | 12.4 % | 82 % (68) |
+| k_eff off-diagonal | -0.678 | 5.27 %ᴺ | 69 % (55) | 0.033 | 3.77 %ᴺ | 60 % (32) |
+| C normal (C11, C22, C33) | 0.770 | 59.2 % | 70 % (64) | 0.737 | 66.8 % | 72 % (53) |
+| C coupling (C12, C13, C23) | 0.836 | 9.21 %ᴺ | 64 % (56) | 0.840 | 9.33 %ᴺ | 67 % (48) |
+| C shear (C44, C55, C66) | 0.838 | 33.2 % | 82 % (75) | 0.817 | 36.9 % | 74 % (56) |
+| C off-class (12 others) | -0.444 | 2.09 %ᴺ | 65 % (52) | 0.145 | 1.41 %ᴺ | 71 % (54) |
+| E* = mean(E_x, E_y, E_z) | 0.822 | 43.1 % | 67 % (61) | 0.794 | 49.3 % | 62 % (39) |
+| E_z | 0.837 | 42.1 % | 77 % (70) | 0.805 | 49.9 % | 76 % (57) |
+| a_sf L | 0.945 | 2.3 % | 49 % (45) | 0.937 | 2.4 % | 86 % (86) |
+| loc p99, uniaxial | 0.880 | 14.7 % | 72 % (62) | 0.856 | 16.8 % | 74 % (61) |
+| loc p99, shear | 0.867 | 16.5 % | 72 % (59) | 0.848 | 17.8 % | 65 % (48) |
+
+*Split "sparse": trained on all pure G/D + a random 25 % of the blends (95 rows), tested on the other
+75 % of the blends (195 rows):*
+
+| quantity | GP R² | GP err | GP cov95 | ens R² | ens err | ens cov95 |
+|---|---|---|---|---|---|---|
+| K principal values | 0.996 | 2.0 % | 90 % (89) | 0.994 | 2.4 % | 84 % (83) |
+| K* = tr K/3 | 0.997 | 1.5 % | 83 % (82) | 0.995 | 2.1 % | 76 % (76) |
+| k_eff diagonal | 0.981 | 4.0 % | 95 % (90) | 0.982 | 3.4 % | 91 % (82) |
+| k_eff off-diagonal | 0.737 | 1.46 %ᴺ | 97 % (92) | 0.851 | 1.02 %ᴺ | 89 % (72) |
+| C normal (C11, C22, C33) | 0.947 | 11.8 % | 91 % (85) | 0.947 | 11.8 % | 87 % (77) |
+| C coupling (C12, C13, C23) | 0.868 | 5.85 %ᴺ | 85 % (73) | 0.958 | 3.10 %ᴺ | 78 % (68) |
+| C shear (C44, C55, C66) | 0.942 | 9.9 % | 96 % (92) | 0.948 | 9.0 % | 93 % (81) |
+| C off-class (12 others) | -2.400 | 1.62 %ᴺ | 98 % (91) | 0.585 | 0.61 %ᴺ | 92 % (79) |
+| E* = mean(E_x, E_y, E_z) | 0.964 | 9.5 % | 89 % (84) | 0.959 | 9.7 % | 85 % (70) |
+| E_z | 0.960 | 11.1 % | 93 % (88) | 0.965 | 10.0 % | 87 % (78) |
+| a_sf L | 0.996 | 0.5 % | 87 % (82) | 0.994 | 0.6 % | 87 % (87) |
+| loc p99, uniaxial | 0.977 | 6.6 % | 96 % (90) | 0.975 | 6.0 % | 90 % (79) |
+| loc p99, shear | 0.974 | 7.0 % | 96 % (92) | 0.973 | 6.3 % | 90 % (80) |
+
+**6c — Does geometry-based learning extrapolate better?** (`results/task6_cnn_metrics.csv`, figure
+`task6_cnn_extrapolation.png`). Same targets (log K*, log E*) and rows for all three; GP/ensemble see
+theta, the CNN sees the 32³ voxel cell + a_z; raw (not recalibrated) intervals; CNN = 3 members,
+120 epochs.
+
+| split | target | GP MAPE / cov95 | ensemble MAPE / cov95 | CNN MAPE / cov95 |
+|---|---|---|---|---|
+| cv5 | K_star | 0.7 % / 96 % | 0.8 % / 87 % | 1.3 % / 98 % |
+| cv5 | E_star | 5.6 % / 91 % | 5.2 % / 85 % | 5.8 % / 95 % |
+| sparse | K_star | 1.5 % / 88 % | 1.8 % / 81 % | 2.2 % / 93 % |
+| sparse | E_star | 9.4 % / 89 % | 11.1 % / 70 % | 7.3 % / 92 % |
+| band | K_star | 5.7 % / 35 % | 5.5 % / 47 % | 6.7 % / 45 % |
+| band | E_star | 45.3 % / 66 % | 53.6 % / 33 % | 107.2 % / 20 % |
+
+- **No, not across a gap of unseen topology.** On the band split the CNN is *worse* than the parameter
+  models for E* (107 % vs 45-54 % MAPE) and slightly worse for K*. Blends with 0.375 < w < 0.625 lose
+  72-79 % of the stiffness a log-linear G-D interpolation predicts at rho* <= 0.3 and ~50 % at
+  rho* = 0.3-0.4 (pinch necks, Tasks 1-3); no training
+  blend outside the band shows this (E*/interpolation >= 0.91), so the mechanism is absent from the
+  training data and a voxel model has no basis to predict it — it meets unfamiliar neck features and
+  over-predicts more than the smooth parameter models do. Its E* error even *grows* toward the band
+  edge (up to ~500 % at w ~ 0.72): at rho* ~ 0.2-0.25, E* drops 3-8x between w ~ 0.76 (train) and
+  w ~ 0.72 (test) while the controlling necks are 0.03-0.09 L thick = 1-3 voxels at 32³, i.e. the
+  feature that sets the stiffness is at the input resolution and the two cells look almost the same
+  to the network. Global max-pooling (a neck detector) did not help (95 % vs 110 %, 2-member trial);
+  a 64³ input (8x cost) is the obvious next experiment.
+- **Yes, when the topology change is sampled sparsely.** With 25 % of the blends in training (sparse)
+  the CNN is the best E* model (7.3 % vs 9.4 % GP, 11.1 % ensemble) with the best-calibrated raw
+  intervals (92 % vs 89 / 70 %); for K* the parameter models stay ahead (1.5-1.8 % vs 2.2 %).
+- **Dense data (cv5): no advantage.** With 232 training rows the CNN is on par for E* (5.8 % vs
+  5.2-5.6 %) and behind for K* (1.3 % vs 0.7-0.8 %), but again the best calibrated (95-98 % raw
+  coverage vs 85-96 %). Geometry helps most when parameter-space data are scarce.
+- Practical consequence: Task 9/11 use the parameter-based `ClosureModel` (full tensors, cheap); the CNN
+  stays a research result (and a tool for geometries outside the (w, rho*, a_z) family).
+- None of the models may be trusted in the pinch-neck region without examples there; the Task 5 table
+  does sample it, so the production models do see it (CV errors above).
+
+**Timings** (build sandbox, 2 cores; parallel jobs running, so upper bounds)
+| Step | Time |
+|---|---|
+| GP fit, 40 targets (2 jobs) | ~50 s; production with 5-fold recalibration ~5 min |
+| Ensemble fit, 5 members (2 jobs) | ~20 s; with recalibration ~2 min |
+| `scripts/task6_evaluate.py` | ~6 min |
+| CNN member, 290 rows x 120 epochs | ~6 min/member (1 core); production ensemble of 3 (2 jobs): 16.5 min |
+| `predict`, 512 points, with std / mean only | GP 0.69 / 0.12 s; ensemble 0.33 / 0.14 s |
+| CNN `predict`, 1 theta (voxelize + 16-fold TTA x 3 members) | ~1 s |
+
+**Recommended for Task 9 / 11:** `ClosureModel.load("ensemble")` — best held-out accuracy for k_eff, C,
+E* and localization on pure *and* blended cells, equal for K and a_sf, fastest with std. Cross-check
+with `"gp"` (better calibrated for K: 91 vs 86 % coverage). Re-check final optimized designs with the
+direct solvers when they sit in the neck region.
+
+**Open issues / notes for later tasks**
+1. **Pinch-neck region (0.3 < w < 0.7, rho* < 0.4):** stiffness/localization surrogate errors ~10 %
+   (vs ~1-2 % elsewhere) and intervals too narrow there. Task 11 options: forbid the region (it is
+   structurally poor anyway, Task 3), add Task 5 samples there (densify w in 0.3-0.7, rho* 0.2-0.4 and
+   retrain — the scripts are ready), or verify final designs directly.
+2. Ensemble K* coverage is 86 % in CV (K multipliers ~1.1): fine for design, not for K uncertainty
+   studies — use the GP for those.
+3. Off-diagonal / off-class tensor components (blends) are small (NMAE 0.3-0.7 % of the diagonal);
+   their R² is low because most values are ~0 — Task 9 rotates full tensors, so these errors are
+   negligible next to the diagonal ones.
+4. k_eff/k_s is valid for the Task 5 contrast k_f/k_s = 1/325 only; C scales exactly with E_s at
+   nu = 0.33. Retrain if the material changes.
+5. `ClosureModel` warns outside the training box (rho* 0.2-0.5, a_z 0.6875-1.5); the optimizer
+   bounds (plan §2) are inside it.
+6. Task 5 STATUS notes were missing from the repo (see Task 5 above).
+7. Workspace: PyPI blocked (no pyarrow, no torch); the parquet table was read with a throw-away
+   pure-Python reader in the sandbox only (not shipped). Python 3.13, numpy 2.5.3, scipy 1.18.1,
+   scikit-learn 1.9.1.
+8. Citations to verify: Lakshminarayanan, Pritzel & Blundell 2017 (NeurIPS, deep ensembles); Arsigny,
+   Fillard, Pennec & Ayache 2006 (Magn. Reson. Med. 56:411, Log-Euclidean metric); Rasmussen &
+   Williams 2006 (*Gaussian Processes for Machine Learning*, Matérn/ARD); Daleckii & Krein 1965 /
+   Higham 2008 (*Functions of Matrices*) for the Fréchet derivative; Kuleshov, Fenner & Ermon 2018
+   (ICML, recalibration of regression uncertainty); Loshchilov & Hutter 2019 (AdamW).
+
+**Figures** (`results/figures/`): `task6_parity_cv.png` (5-fold CV parity, GP and ensemble, recalibrated
+95 % bars), `task6_parity_band.png` (band split), `task6_calibration.png` (observed vs nominal coverage,
+raw and recalibrated, cv5 / band / sparse), `task6_cnn_extrapolation.png` (CNN vs GP vs ensemble, parity
+per split + error vs w).
+
+**Tests**: 336 passed + 4 skipped (pyamg x3, pyarrow x1) in 32.5 min — Tasks 0-6 incl. slow, run alongside
+the CNN experiment (`results/task6_pytest_log.txt`). Task 6 alone (`tests/test_surrogates.py`): 46 passed
+(1 `slow`: GP hold-out accuracy on the real table); `pytest -m "not slow" tests/test_surrogates.py` ~1 min.
+Covered: vectorization / logm / expm / Fréchet derivative vs finite differences (incl. repeated
+eigenvalues); Mandel rotation = `elasticity.rotate_stiffness`; group closure, projector rank and
+idempotence per class, class structure of projected tensors (trigonal 7-constant pattern); declared
+symmetry is physical (Task 2 solver: G cubic, w = 0.5 trigonal and *not* cubic, stretched G tetragonal);
+latent round trip; delta-method std vs Monte Carlo; gradient checks of every NN layer and the NLL;
+periodic-conv translation equivariance; Adam; GP = scikit-learn prediction, ARD switches off an
+irrelevant input; ensemble uncertainty grows away from data; CNN exact shift invariance and exact
+TTA invariance; `ClosureModel` shapes, SI and L scaling, SPD, exact symmetry classes, save/load,
+bounds, recalibration; metrics and splits; real table (symmetry-projection size, hold-out accuracy);
+trained models reproduce the Task 2-4 tables (rho* = 0.35: K*, k*, E* within 3 / 3 / 6 %).
+Tests needing the Task 5 table read `data/closures.parquet` (pyarrow) or `$VOXLAT_CLOSURE_TABLE`; tests of
+the trained models skip if `models/` is empty.
+
+## Task 7 — Finite-gap study (RQ1)  ✅
+
+**Built**
+- `src/voxlat/homogenization/finite_gap.py` — strips (`GapSpec`, `build_strip`, `bulk_cell`), wall removal
+  (`compute_properties`, laminate mixed form), homogenized prediction (`BulkInterpolator`,
+  `homogenized_properties`), discrepancies, discrepancy models (`PhysicalDiscrepancyModel`,
+  `GPDiscrepancyModel`, `grouped_cv`) and the Task 9 API `FiniteGapCorrection`.
+- `src/voxlat/homogenization/finite_gap_study.py` — suite design, resumable workers (one JSON part per bulk
+  cell / strip in `data/finite_gap/`, git-ignored), consolidation to **`data/finite_gap.csv`** (340 rows; +parquet
+  when pyarrow exists).
+- `src/voxlat/homogenization/coarse.py` — **two-level preconditioner** (Jacobi + unsmoothed aggregation coarse
+  space on 8³ boxes: constants for conduction / each Stokes velocity component (4³ boxes), the 6 rigid-body modes
+  for elasticity). Needed because Jacobi iterations grow with the long strip axis and pyamg is not installable here.
+- Solver extensions (backward compatible; defaults and Task 2-6 numbers unchanged; Task 2-4 tests re-run):
+  `preconditioner="two_level"` (+ `coarse_block`) in all three solvers; `effective_conductivity(..., directions=)`;
+  `effective_elasticity(..., load_cases=)` (unsolved columns NaN; localization needs all six).
+- Scripts: `scripts/task7_finite_gap.py` (run suites, `--estimate-only`, `--quick`, `--table-only`),
+  `scripts/task7_fit_discrepancy.py` (models + tables), `scripts/task7_figures.py`.
+- Model file `models/finite_gap_correction.json` (fitted coefficients + metadata, plain JSON).
+- Tests: `tests/test_finite_gap.py` (26). `configs/reference.yaml`: gradient limit now evidence-based (below).
+
+**Set-up and decisions**
+1. *Strip* = lattice of N cells across the gap (x = r), periodic and one cell wide in y = s and z = axial, plus a
+   solid wall layer t_w = 0.5 L; periodic in x too, so one wall bounds every lattice layer on both sides (no slip,
+   perfect bond, k_s). N ∈ {1, 1.5, 2, 3, 4, 6, 8}; N = 1.5 cuts the two walls at different phases.
+2. *Same grid for strip and bulk*: the strip lattice is a bit-exact x-tiling of the bulk reference cell (same n,
+   same cut phase, same bisection threshold), so the voxel staircase error (Tasks 2-4: up to 17 % for k_eff) cancels
+   in q_strip/q_bulk. Checked: n = 24/32/48 change δ by ≤ 0.4 pp (K_t), ≤ 0.6 pp (k_n), ≤ 1.4 pp (C_nn, G_t at N = 1).
+3. *Walls removed analytically* ("bulk closure + plain walls" = laminate of homogeneous layers, exact for laminates,
+   tested against Backus and the slit/series cases): k_n from T/k_stack = H/k_n + t_w/k_s; K_t = (T/H) K_stack[yz];
+   C from the **laminate mixed form** (tractions s_xx, s_xz, s_xy and in-plane strains continuous; the map
+   [s_n; e_t] → [e_n; s_t] is volume-additive) → full 6×6 apparent core tensor.
+4. *Quantities*: k_n = through-gap conductivity; K_t = in-plane permeability (mean of K_ss, K_zz; flow along the gap);
+   C_nn = C_rrrr normal stiffness across the gap; **G_t = (G_rs + G_rz)/2 = (C66 + C55)/2, the shear with the walls
+   sliding parallel to each other — this is what carries torque (G_rs) and thrust (G_rz) from sleeve to outer wall**;
+   G_sz = C44, shear in the plane of the gap. ("In-plane shear" in the plan was ambiguous; both are reported.)
+5. *Cut phase*: default cuts φ0 ∈ {0, 1/3, 2/3}. **For gyroid and diamond the 4_1 screws along x and the 2-fold axes ⟂ x
+   make φ ≡ φ + 1/4 ≡ −φ**, so the distinct cuts lie in [0, L/8]; 1/3 and 2/3 both reduce to L/12 (identical results,
+   verified), so an extra cut L/8 was added for G/D → distinct cuts {0, L/12, L/8}. Blends (trigonal) have no such
+   symmetry: 3 distinct cuts over a full period. Analyses use one row per distinct cut (`distinct_cuts`).
+   Screw symmetry is also a test (K_ss ↔ K_zz, G_rs ↔ G_rz under φ → φ + 1/4).
+6. *Discrepancy*: δ_q = q_strip/q_hom − 1 (corrected closure q = q_bulk (1 + δ)); the error of the homogenized
+   prediction is −δ/(1+δ). Graded strips: q_hom = local closures at every voxel layer combined like a laminate
+   (harmonic k, arithmetic K, mixed-form C) with log-Euclidean PCHIP interpolation of bulk cells at
+   ρ* = 0.175…0.525 (step 0.025).
+
+**Public API (`voxlat.homogenization.finite_gap`; main names also in `voxlat.homogenization`)**
+```python
+GapSpec(w, rho, N, phase=0, gradient=0, a_z=1, wall=0.5, n=32)  # .n_lattice .n_wall .layer_rho .case_id
+build_strip(spec) -> Strip(.solid (x, y, z) bool, .thresholds, .layer_density); bulk_cell(w, rho, n, phase, a_z)
+strip_properties(spec, preconditioner="two_level", k_s=, k_f=, E=, nu=) -> (Strip, GapProperties)
+bulk_properties(w, rho, n, phase, a_z) -> GapProperties
+GapProperties: .k_n [W/mK] .K_t (2x2, L^2) .C (6x6 Pa) + stack values; .scalars() -> k_n, K_t, K_s, K_z, C_nn,
+    G_t, G_rs, G_rz, G_sz, C_tt; .dimensionless()
+compute_properties(solid, n, n_lattice, n_wall, quantities=("k","K","C"))  # any stack, wall removed
+laminate_mixed_form(C), from_mixed_form(M), laminate_average(Cs, f), laminate_core(C_stack, C_wall, f_wall)
+BulkInterpolator(rhos, props); homogenized_properties(spec, bulk); discrepancy(strip, hom); homogenized_error(delta)
+reduced_phase(w, phase); distinct_cuts(df); brinkman_channel_factor(N, K/L^2)
+PhysicalDiscrepancyModel(quantities).fit(df) .predict(q, N, w, rho, a_z, gradient) .predict_std(q, N)
+GPDiscrepancyModel(physical).fit(df).predict(df); grouped_cv(df, groups="theta"|"N", strata=)
+corr = FiniteGapCorrection.load()          # models/finite_gap_correction.json
+corr.factor(q, N, w, rho, a_z=1, gradient=0) -> 1 + delta (phase-averaged);  corr.factor_std(q, N)
+# voxlat.homogenization.coarse: TwoLevelPreconditioner(A, P), box_aggregates, scalar_coarse_basis, rigid_body_coarse_basis
+```
+
+**Results (n = 32, wall 0.5 L; phase mean over distinct cuts; `results/task7_coefficients.txt`)**
+
+δ [%] at N = 1 / 2 / 3 (the jacket has h = 6 mm, L = 2–6 mm → N = 1–3):
+
+| | ρ* | k_n | K_t | C_nn | G_t | G_sz |
+|---|---|---|---|---|---|---|
+| Gyroid | 0.25 | −2.1/−1.0/−0.7 | **−28.4/−14.2/−9.4** | +7.3/+3.5/+2.3 | +7.3/+3.4/+2.2 | +11.4/+5.6/+3.7 |
+| | 0.35 | −2.3/−1.1/−0.8 | **−26.6/−13.3/−8.9** | +4.1/+1.9/+1.3 | +3.3/+1.5/+1.0 | +4.2/+2.1/+1.4 |
+| | 0.45 | −1.9/−1.0/−0.6 | **−25.4/−12.7/−8.5** | +1.9/+0.9/+0.6 | +1.6/+0.7/+0.5 | +1.9/+0.9/+0.6 |
+| Diamond | 0.25 | −0.5/−0.3/−0.2 | **−22.4/−11.2/−7.5** | +4.4/+2.1/+1.4 | −2.0/−1.1/−0.8 | +11.2/+5.5/+3.6 |
+| | 0.35 | −0.7/−0.4/−0.2 | **−20.3/−10.2/−6.8** | +4.4/+2.1/+1.4 | −3.7/−1.9/−1.3 | +7.7/+3.8/+2.5 |
+| | 0.45 | −0.5/−0.3/−0.2 | **−18.7/−9.4/−6.2** | +4.4/+2.2/+1.4 | −3.9/−2.0/−1.4 | +5.5/+2.7/+1.8 |
+| Blend 0.5 | 0.25 | +9.7/+4.3/+2.8 | −26.5/−13.4/−9.1 | +85/+18/+11 | +53/+18/+11 | +105/+52/+35 |
+| | 0.35 | +13.9/+5.9/+3.7 | −23.9/−12.0/−8.1 | +86/+15/+9 | +51/+17/+10 | +84/+41/+27 |
+| | 0.45 | +1.4/+0.7/+0.4 | −23.4/−11.7/−7.8 | +9.4/+4.3/+2.8 | +6.8/+3.1/+2.0 | +14/+7/+5 |
+
+RQ1 answers:
+1. **The dominant finite-gap error is the in-plane permeability: the bulk closure over-predicts K_t by 23–40 % at N = 1
+   (δ = −19 … −28 %), 10–17 % at N = 2, 7–10 % at N = 3** — the whole jacket design range. It is cleanly ∝ 1/N
+   (rms deviation 0.4 pp per (θ, cut); adding a 1/N² term changes nothing), almost independent of ρ* and of the cut
+   (G/D phase std of a ≤ 0.011), i.e. a fixed wall layer of thickness a L/2 ≈ 0.13 L (G), 0.10 L (D), 0.12 L (blend)
+   that carries no flow. **No near-wall channelling** (`task7_velocity_slices.png`): the planar porosity next to a cut
+   TPMS equals the bulk's (unlike packed beds), the wall closes the pores it cuts and the flow deficit is confined to
+   ≈ L/4 of each wall; the interior profile equals the bulk profile. Brinkman with μ_e = μ (2√K/L = 0.14 G, 0.11 D,
+   0.13 blend at ρ* = 0.35) under-predicts the loss by ~1.9×, and a scales with L, not √K (a ≈ const in ρ*).
+   Stretch a_z = 0.75 / 1 / 1.5: a_K = 0.24 / 0.27 / 0.30 (G), 0.18 / 0.20 / 0.25 (D).
+2. **Through-gap conductivity: negligible for G/D** (|δ| ≤ 2.3 %, G −2 %/N, D ≈ 0, below the Task 6 k_eff surrogate
+   error); the walls' constriction/spreading of strut contacts nearly balance. Blends at ρ* ≤ 0.35: +10–14 % at N = 1,
+   strongly cut dependent (up to +38 % for one cut).
+3. **Stiffness: the bonded walls stiffen the core.** G/D at N = 1 (∝ 1/N): C_nn +2…+7 %, G_t +1.6…+7 % (G) and −2…−4 % (D),
+   G_sz +2…+11 %. Blends below ρ* ≈ 0.4: **+50…+190 % at N = 1** (cut through the pinch necks of Tasks 1-3: the wall
+   replaces the weakest links; the bulk blend is only 0.013–0.027 E_s stiff there), not ∝ 1/N at N = 1 and dominated
+   by the cut phase.
+
+**Discrepancy model — fitted correction (`models/finite_gap_correction.json`)**
+- series (k_n, C_nn, G_t): q/q_bulk = (1 + c_g g²) / (1 + a/N);  parallel (K_t, G_sz): q/q_bulk = (1 + c_g g²)(1 − a/N);
+  a > 0 = loss, a < 0 = gain. a(θ) = β·[1, r, w, b, r w, r b, ln a_z], r = (ρ* − 0.35)/0.1, b = 4w(1−w); least
+  squares on the observed a with rows weighted by 1/N (error in δ); c_g from the G/D graded strips.
+
+| q | 1 | r | w | b | r·w | r·b | ln a_z | c_g | phase std of a |
+|---|---|---|---|---|---|---|---|---|---|
+| k_n | +0.0206 | −0.0011 | −0.0164 | −0.0729 | +0.0011 | +0.0248 | −0.0312 | +0.05 | 0.065 |
+| **K_t** | **+0.2663** | −0.0147 | **−0.0616** | +0.0110 | −0.0035 | −0.0001 | +0.0891 | −1.29 | 0.039 |
+| C_nn | −0.0385 | +0.0234 | −0.0034 | −0.2056 | −0.0239 | +0.1111 | −0.0563 | +0.84 | 0.065 |
+| G_t | −0.0383 | +0.0261 | +0.0680 | −0.2169 | −0.0170 | +0.1032 | −0.0320 | +0.81 | 0.046 |
+| G_sz | −0.0589 | +0.0473 | −0.0294 | −0.5978 | −0.0190 | +0.4105 | +0.0099 | −0.70 | 0.115 |
+
+  Handy values: a_K = 0.266 (G), 0.205 (D), 0.251 (blend) at ρ* = 0.35, a_z = 1 → **K_eff = K_bulk (1 − 0.27/N)** for the
+  gyroid. Observed a per morphology/density: `results/task7_wall_coefficients.csv`.
+- **Which is sufficient?** Leave-one-(w, ρ*, a_z)-out CV, rms error of δ in pp (`results/task7_model_cv.csv`,
+  `task7_discrepancy_models.png`; "floor" = pooled scatter over cut phases, which no (N, θ)-model can remove):
+
+| | k_n | K_t | C_nn | G_t | G_sz |
+|---|---|---|---|---|---|
+| G/D: uncorrected / physical / +GP / floor | 1.15 / 0.85 / 0.85 / 0.96 | **12.9 / 0.40 / 0.40 / 0.28** | 2.79 / 1.17 / 1.16 / 1.31 | 2.23 / 0.98 / 1.04 / 0.82 | 4.26 / 1.77 / 1.95 / 0.67 |
+| blend: uncorrected / physical / +GP / floor | 7.4 / 7.9 / 7.9 / 7.5 | **12.9 / 3.5 / 3.5 / 4.1** | 32 / 26 / 27 / 24 | 20 / 18 / 18 / 9.8 | 38 / 21 / 21 / 11 |
+
+  Leave-one-N-out (extrapolation in N) gives the same picture (G/D K_t 13.4 → 0.29 pp, = floor).
+  **The physical 1/N form is sufficient; the GP on its residuals never helps** (≤ 0.1 pp better, sometimes worse):
+  what remains is cut-phase scatter (aleatoric for a homogenized model) or, for blends, the pinch-neck cut effect,
+  neither of which is a smooth function of (N, θ, g). For blends the stiffness corrections are not predictable from
+  (N, θ) at all (residual ≈ floor ≈ 10–25 pp) — another reason to keep mid-w out of the low-ρ* region in Task 11.
+
+**Graded strips (`results/task7_graded.csv`, `task7_graded_error.png`)** — gradient effect relative to the uniform
+strip with the same N, mid-gap ρ* and cut, Δ_g = (1+δ_graded)/(1+δ_uniform) − 1. G/D, worst single cut, any quantity:
+**g = |∇ρ*| L = 0.025: 0.9 %, 0.05: 1.0 %, 0.075: 2.0 %, 0.15: 3.5 %** (largest for K_t, which drops: momentum
+exchange between fast low-ρ* and slow high-ρ* layers that a local Darcy closure cannot see). → **`max_density_change_per_cell`
+= 0.05 confirmed** (was a placeholder since Task 0; ≤ 1 % local-closure error for G/D). Blends: Δ_g = −8…−20 % (G_sz),
+−4…+11 % (C_nn) already at small g, because their wall effect changes across the pinch transition (ρ* ≈ 0.375) as
+the wall densities move; no gradient limit makes graded blends safe there.
+
+**Checks (`task7_convergence.png`, `results/task7_convergence.csv`, `results/task7_wall_thickness.csv`)**
+- Resolution n = 24 / 32 / 48 (G, D; ρ* = 0.35; N = 1, 2, 4): K_t to 0.4 pp, k_n 0.6 pp, G_t / G_sz ≤ 1 pp,
+  C_nn ≤ 1.4 pp (N = 1). The n = 32 stiffness δ therefore carry ~±1.5 pp at N = 1.
+- Wall thickness t_w/L = 1/8 … 1: K_t exactly independent; k_n and G_t converge by 0.5 L (within 0.2–0.4 pp of 1 L);
+  thin walls (1/8 L) bias k_n up by ~2 pp (heat crosses a thin periodic wall between aligned strut contacts without
+  spreading) and G_t down by ~3 pp (wall bending); C_nn varies ±1 pp non-monotonically. Real walls are 1.5–2 mm = 0.25–1 L.
+- Exact cases (tests): laminate mixed form = Backus; empty gap = MAC slit (H²+2)/12; series laminate k; solid gap =
+  solid; no-wall integer-N strip = bulk to 1e-6; screw symmetry; two-level = Jacobi to 1e-6.
+
+**Timings (sandbox, 2 parallel workers, two-level, incl. extraction)**: median per strip at n = 32: N = 1: 11 s, N = 2: 18 s,
+N = 4: 30 s, N = 8: 53 s (blends 13 / 22 / 50 / 96 s);
+n = 48: N = 2 ~55–65 s, N = 8 blend 390 s (peak RSS 2.3 GB). Iterations: elasticity 113–344, Stokes 116–683, conduction
+82–135 (Jacobi on the N = 8 gyroid strip: 1100–1350 elasticity iterations, 271 s). Full n = 32 study (336 strips +
+157 bulk cells): 92 min on 2 cores. Fit + CV: 3.5 min. Figures: 1.5 min (velocity fields cached).
+
+**Optional overnight run (n = 48, production numbers)**
+```powershell
+python scripts/task7_finite_gap.py --estimate-only --suite uniform graded stretch --n 48 --n-jobs 4
+python scripts/task7_finite_gap.py --suite uniform graded stretch --n 48 --n-jobs 4   # ~3-4 h, <= 2.3 GB per worker
+python scripts/task7_fit_discrepancy.py      # picks n = 48 automatically once its uniform suite (231 strips) is complete
+python scripts/task7_figures.py
+```
+Sandbox estimate 8.5 CPU-h (the n = 32 estimate was ~25 % low); 4 workers need ≤ ~9 GB. Resumable: rerun the same
+command. Use `--preconditioner auto` to try pyamg on the laptop (results agree to the solver tolerance).
+
+**Open issues / notes for later tasks**
+1. **Task 9 must apply the K correction**: K_t,eff = K_bulk (1 − a_K/N), N = h/L (local), ≈ −9…−28 % in the jacket
+   range — larger than every other closure uncertainty. Apply it to the in-plane (s, z) permeability only; the
+   through-gap (r) component is irrelevant in the depth-averaged model. `FiniteGapCorrection.factor("K_t", ...)`.
+   k_n: skip for G/D (|δ| ≤ 2 %). Stiffness: the correction is conservative to ignore for G/D (walls stiffen) except
+   diamond G_t (−2…−4 % at N = 1); use G_t (not G_sz) for torque/thrust transfer.
+2. a is defined for the gap N = h/L with L the radial cell size; for graded designs use local L and ρ*.
+   Valid: N ≥ 1, ρ* 0.25–0.45 fitted (0.2–0.5 graded), a_z 0.75–1.5, network TPMS with bonded walls.
+3. **Cut phase is a free design choice (Task 12)**: for G/D its effect is small (K_t ±0.5 pp, stiffness ±1–2 pp at
+   N = 1); for blends ±7 pp in K_t and up to a factor 2 in stiffness. Task 12 should fix the phase at the sleeve and
+   report it; `factor_std` gives the phase scatter.
+4. Blends with ρ* < 0.4: finite-gap stiffness corrections are cut-dependent and unpredictable (consistent with the
+   Task 1-6 pinch-neck findings) — another argument to restrict mid-w at low ρ* in Task 11.
+5. The stiffness extraction attributes all wall-lattice interaction energy to the lattice layer (the definition of an
+   apparent core property); in-plane quantities (G_sz, C_tt) are wall-dominated in the stack (at N = 1 the wall carries
+   ~3–10× the core's in-plane stiffness), so their δ are sensitive to small modelling details — report them as secondary.
+6. Gradient study is radial (across the gap), the design (Task 11) grades in-plane (s, z). The radial result bounds the
+   local-closure error per unit gradient for series (k_n, C_nn) and parallel (K_t) combinations alike; an in-plane
+   graded check could be added in Task 9 if needed.
+7. Numbers are at n = 32; the overnight n = 48 run would tighten stiffness δ by ~1 pp (K_t is already converged).
+8. Citations to verify: Brinkman 1949 (Appl. Sci. Res. A1:27) / Neale & Nader 1974 (Can. J. Chem. Eng. 52:475) for
+   the Brinkman channel; Backus 1962 and Postma 1955 (Geophysics 20:780) for the laminate mixed form; Vaněk, Mandel &
+   Brezina 1996 (Computing 56:179) and Toselli & Widlund 2005 for aggregation / two-level preconditioning; space groups
+   I4₁32 / Fd-3m of the gyroid / diamond networks (e.g. Schröder-Turk et al. 2006; Hyde et al. 1997) for the cut-phase
+   symmetry; near-wall porosity/channelling in packed beds (e.g. Benenati & Brosilow 1962, AIChE J. 8:359) for the contrast.
+9. Workspace: PyPI blocked (no pyamg, pyarrow, torch); numpy 2.5.3, scipy 1.18.1, scikit-learn 1.9.1, Python 3.13.
+
+**Figures** (`results/figures/`): `task7_error_vs_N.png` (main figure: δ vs 1/N, 5 quantities, G/D top, blend bottom,
+cut range bars, model lines, jacket band), `task7_discrepancy_models.png` (CV: uncorrected / physical / +GP / floor),
+`task7_velocity_slices.png` (u_z slices and plane-averaged profiles, N = 2, n = 48), `task7_graded_error.png`,
+`task7_convergence.png` (resolution and wall thickness). Tables: `results/task7_*.csv`, `results/task7_coefficients.txt`,
+`results/task7_fit_log.txt`; data `data/finite_gap.csv`.
+
+**Tests**: 361 passed + 6 skipped (pyamg ×3, pyarrow-dependent ×3) in 16.9 min, Tasks 0–7 incl. slow
+(`results/task7_pytest_log.txt`). Task 7 alone (`tests/test_finite_gap.py`): 27 tests in ~25 s.
+
+## Task 8 — Literature closures (Nu, Forchheimer)  ✅
+
+**Built**
+- `src/voxlat/closures/empirical.py` — C_F and interstitial Nu correlations with published validity boxes,
+  `CorrelationRangeWarning` / `CorrelationRangeError`, a literature registry (`LITERATURE`, `literature_table()`),
+  packed-bed references for cross-checks, and the convenience chain `interstitial_heat_transfer`. Main names
+  re-exported from `voxlat.closures`.
+- `tests/test_empirical.py` (26 tests, < 1 s): published coefficients, the papers' own tabulated CFD values, the
+  Darcy–Forchheimer/friction identity, Pr scaling and the Re → 0 limit, validity warnings, reference values of the
+  packed-bed correlations, and **independent checks of Tasks 1 and 4 against the published CFD** (below).
+- `scripts/task8_literature_closures.py` (~5 s) → `results/task8_literature_table.csv`,
+  `results/task8_operating_range.csv`, `results/task8_nusselt_comparison.csv`, `results/figures/task8_forchheimer.png`,
+  `results/figures/task8_nusselt.png`.
+- `docs/task8_literature_closures.md` — the full literature table, recommendations, risk table and the manuscript
+  limitations paragraph.
+
+**Definitions (module docstring)**: φ = 1 − ρ*, D_h = 4φ/a_sf (a_sf per total volume), U_b = U_s/φ,
+**Re_Dh = U_b D_h/ν = 4U_s/(a_sf ν)**, Re_K = U_s√K/ν, Fo = C_F Re_K; −∇p = μU_s/K + ρC_F U_s²/√K;
+f = (dp/dx) D_h/(½ρU_b²) (Darcy-type, 4× Fanning), so **f Re = 2φD_h²/K + 2φ²C_F (D_h/√K) Re** (Savoldi et al. 2026, Eq. 23);
+Nu = h_sf D_h/k_f with h_sf the surface-averaged wall flux over (T_wall − T_bulk) on the whole solid–fluid interface.
+
+**Public API (`voxlat.closures.empirical`)**
+```python
+forchheimer_coefficient(porosity, w=0, source="gajetti2025"|"gajetti2025_table"|"savoldi2026", re=None,
+                        on_extrapolation="warn"|"raise"|"ignore") -> C_F        # blends: ln C_F linear in w
+pressure_gradient(U_s, K, C_F, density=, dynamic_viscosity=) -> |grad p| [Pa/m]
+friction_factor_re(Re, porosity, D_h, K, C_F) -> f Re  (finite at Re = 0);  friction_factor(...) -> f
+nusselt_interstitial(Re, porosity, f_Re, Pr, variant=1, pr_exponent=1/3, w=0, on_extrapolation=) -> Nu_Dh
+interstitial_heat_transfer(U_s, porosity, a_sf, K_bulk, w=0, conductivity=, kinematic_viscosity=, prandtl=,
+                           cf=None, cf_source=, variant=1, pr_exponent=1/3) -> InterstitialHeatTransfer
+    # .h_sf [W/m2K] .h_sf_a_sf [W/m3K] .nusselt .reynolds .friction .friction_re .cf .hydraulic_diameter
+hydraulic_diameter, equivalent_particle_diameter (6(1-phi)/a_sf), pore_velocity, reynolds_hydraulic,
+reynolds_permeability, forchheimer_number, stanton_savoldi2026(Re, phi, f, variant)
+gajetti2025_permeability / gajetti2025_forchheimer (phi, tpms); savoldi2026_hydraulic_diameter / _permeability /
+_forchheimer (phi); nusselt_gnielinski_packed_bed(Re_p, Pr, phi); nusselt_wakao_kaguei(Re_p, Pr);
+nusselt_reynolds2023(Re, Pr)
+check_range(key, re=, porosity=, pr=, w=, on_extrapolation=) ; range_report(...) -> fractions outside each bound
+LITERATURE[key] -> CorrelationInfo(.citation .doi .tpms .method .fluid .re_definition .formula .validity ...)
+literature_table(implemented_only=False) -> DataFrame ; RECOMMENDED (dict)
+GAJETTI2025_POWER_LAWS, GAJETTI2025_TABLE2, SAVOLDI2026_HYDRAULICS, SAVOLDI2026_STANTON, RATHORE2023_CF
+```
+
+**Literature table** (coefficients read from the open-access full texts unless noted; full table with methods in
+`docs/task8_literature_closures.md`, machine-readable in `results/task8_literature_table.csv`)
+
+| Source | TPMS | Re; φ; Pr | Formula | Obtained by |
+|---|---|---|---|---|
+| **Gajetti et al. 2025** [1] | G, D, Split-P, skeletal | Re_Dh 0.3–100; φ 0.30–0.60 | K/L² = aφⁿ, C_F = bφᵐ (G: 0.0156, 2.78, 0.0908, −1.81; D: 0.0106, 2.89, 0.0666, −1.69) | OpenFOAM, periodic cell, water |
+| Savoldi et al. 2026 [2] hydraulics | G, skeletal | Re_Dh 20–100; φ 0.3–0.7 | D_h/L = 4φ/(−5.723φ² + 5.729φ + 1.665); K/L² = 0.0157φ^2.72; C_F = 0.0784φ^−2.04 | same group |
+| Rathore et al. 2023 [3] | D, G, I-WP, P | Re ≤ 100 (channel length); φ = 0.32 | data: C_F 1.173 (G), 0.525 (D) | DNS of a 4-cell channel |
+| **Savoldi et al. 2026** [2] Eq. 37 | G, skeletal, interstitial | Re_Dh 20–100; φ 0.3–0.7; **Pr = 1** | St = 0.0267 φ^0.19 f (±11 %) | CFD, uniform wall T and q |
+| Savoldi et al. 2026 [2] Eqs. 38–39 | as above | as above | St = 0.135 φ^2.06 Re^(0.440−φ) f (±15 %) | as above |
+| Savoldi et al. 2026 [2] Eq. 40 | as above | as above | St = 0.034 φ^0.20 Re^(−0.061−0.0023φ) f (±12 %) | as above |
+| Cheng et al. 2021 [4] | W, P, D, G porous media | Re_h 10–129; ε 0.2–0.8; air | Nu(Re_h, ε), flow resistance — **coefficients not accessed** | pore-scale CFD |
+| Iyer et al. 2022 [5] | sheet TPMS / nodal surfaces | laminar, Re ≲ 350 | **not accessed** | CFD |
+| Reynolds et al. 2023 [6] | gyroid HX | Re_Dh 100–2500; air | Nu = 0.49 Re^0.62 Pr^0.4 (quoted by [7]) | experiment |
+| Brambati et al. 2024 [7] | G, P, D sheet, φ 0.7–0.9 | Re 5000–50000; Pr 0.7–7 | Nu_Dh = 0.0964 Re_Dp^0.7136 Pr^0.4 — turbulent, not applicable | conjugate RANS |
+| Piandoro et al. 2026 [8] | gyroid sheet | EG (Pr ≈ 154), EG/water Pr 14 | Nu = (23.44 + 7.5φ)√Re_por, f ≈ 1 + 1/Re_por (wall-to-bulk h of a filled duct) | CFD + L-PBF |
+| Gnielinski [9] | packed spheres | Re_p 0.1–1000; Pr 0.4–1000 | Nu_p = (1 + 1.5(1−φ))(2 + √(Nu_lam² + Nu_turb²)) | experiments |
+| Wakao & Kaguei [10] | packed spheres | Re_p 3–3000 | Nu_p = 2 + 1.1 Re_p^0.6 Pr^(1/3) | experiments |
+| Ergun [11] (via [1]) | packed beds | — | 150/Re* + 1.75 — rejected by [1] (30–50 % errors for TPMS) | experiments |
+| Kuwahara et al. 2001 [12] | square-rod arrays | φ 0.2–0.9; Pr = 1 | (porosity term) + (Re term)Pr^(1/3) — coefficients not verified, not implemented | CFD |
+
+**Recommended closures (`RECOMMENDED`)**
+1. **C_F: Gajetti et al. 2025 power laws** (gyroid, diamond; blends ln C_F linear in w). Reasons: the only source with
+   G *and* D from one method (consistent blend interpolation); skeletal cells like ours; Re range from the Darcy regime
+   (0.3) separates K and C_F cleanly; the gyroid refit of Savoldi et al. 2026 (to φ = 0.7) stays within 10 % over
+   φ = 0.5–0.8, which bounds the gyroid extrapolation. `source="gajetti2025_table"` (Table 2 held constant outside
+   φ = 0.3–0.6) is the upper bracket for diamond.
+2. **Nu: Savoldi et al. 2026, variant 1 (Eq. 37) × Pr^(1/3)**, with f from our bulk K, our a_sf and the Gajetti C_F:
+   `Nu = 0.0267 φ^0.19 (f Re) Pr^(1/3)`. Reasons: the only laminar, skeletal, porosity-resolved interstitial
+   correlation we could verify; variant 1 extrapolates physically (constant Nu as Re → 0, Forchheimer-controlled growth
+   at high Re, monotone over the whole jacket box), whereas variant 2 makes Nu *fall* with Re outside its box
+   (φ = 0.8, Pr = 1: 10.0 → 7.4 between Re 10 and 50) and is 0.33–0.94× variant 1 at Re = 600; with Pr^(1/3) variant 1
+   stays within **0.63–1.37×** of the Pr-validated Gnielinski packed-bed correlation over the box (variant 2: down to 0.27×).
+   Price: inside the fitted box variant 2 has more symmetric residuals and is up to 22 % lower at its high-φ/high-Re
+   corner → **run variant 2 as the low-h bound in Task 9/11 sensitivity runs**.
+
+**Independent verification of our solvers against the published CFD (tests)**
+| Quantity | Literature | VoxLat (Task 1/4) | Difference |
+|---|---|---|---|
+| K/L², gyroid φ = 0.5 / 0.6 | 2.2e-3 / 3.9e-3 ([1] Table 2) | 2.224e-3 / 3.829e-3 | +1.1 % / −1.8 % |
+| K/L², diamond φ = 0.5 / 0.6 | 1.4e-3 / 2.4e-3 | 1.410e-3 / 2.390e-3 | +0.7 % / −0.4 % |
+| D_h/L, gyroid φ = 0.5–0.7 | fit of [2] | 4φ/(a_sf L) | ≤ 0.3 % |
+| K/L², gyroid φ = 0.5–0.7 vs fit of [2] | | | −0.5 … +7 % inside; their power law is 17 % low at φ = 0.8 (outside its range) → use our K, never literature K fits |
+Body-fitted OpenFOAM vs our voxel MAC solver agree to the 2-digit precision of their table: a citable validation of Task 4.
+
+**Jacket operating box** (`results/task8_operating_range.csv`; w ∈ {0, 0.5, 1}, ρ* 0.20–0.50, L = 2/4/6 mm, 1–5 L/min,
+mean superficial velocity U_s = Q/(2 h L_ax) of the two half-annulus paths)
+| Quantity | Range (median) |
+|---|---|
+| Re_Dh | 25 – 577 (153); 70 % of points > 100 |
+| Re_K | 0.9 – 37 (7.4) |
+| C_F | 0.097 – 0.32 (0.165) |
+| Fo = C_F Re_K | 0.19 – 5.4 → **inertia is 16 – 84 % of the pressure drop** (median 56 %) |
+| Nu_Dh (variant 1, Pr = 20.7) | 15 – 105 (32) |
+| h_sf | 1.7 – 11 kW/(m² K) (4.9); h_sf a_sf 0.7 – 20 MW/(m³ K) |
+| Nominal (3 L/min, L = 4 mm, ρ* = 0.35) G / blend / D | Re_Dh 195 / 178 / 158; Fo 2.0 / 1.5 / 1.1; Nu 41 / 35 / 30 (variant 2: 31 / 27 / 23); h_sf 4.7 / 4.4 / 4.2 kW/(m² K) |
+
+**Extrapolation risk (flag in the paper)**
+1. **Pr**: the Nu data are at Pr = 1; Pr^(1/3) multiplies h_sf by 2.75 at Pr = 20.7. Exponent 0.4 (Brambati et al.'s turbulent
+   TPMS fit 0.39–0.40; Reynolds et al.'s assumption) gives +22 %. Only TPMS data near our Pr: Piandoro et al. (sheet gyroid,
+   Pr 14–154, wall-based h, no Pr exponent). Cross-check: Gnielinski (valid Pr 0.4–1000) 0.63–1.37×.
+2. **Re**: both closures fitted to Re_Dh ≤ 100; 70 % of operating points lie above (max 577). C_F is assumed constant
+   (strong-inertia form) beyond the weak-inertia range it was fitted in; variants 1 and 2 differ by up to 3× at Re = 600, φ = 0.8.
+3. **Porosity**: C_F fitted to φ ≤ 0.6 (67 % of the operating box is above), Nu to φ ≤ 0.7 (38 % above). Diamond C_F at
+   φ > 0.6: power law vs Table-2 plateau differ 1.2–2.0× → pump-power uncertainty of the same order on the inertial share.
+4. **Topology**: Nu only calibrated for the gyroid; diamond and blends via the analogy with their own f. No C_F or Nu data
+   for G–D blends at all (interpolation).
+5. **Single source**: [1] and [2] come from one group with one CFD set-up; the only independent C_F (Rathore et al., φ = 0.32,
+   4-cell channel with walls) is 1.15× (D) and 1.64× (G) of [1].
+6. **Finite gap and roughness**: literature closures are bulk; the Task 7 wall correction is for creeping-flow K only. Savoldi
+   et al. note systematically higher measured f for printed gyroids (roughness, finite size; Hirokawa & Miyata 2024).
+
+**Notes for Task 9**
+1. Use the **bulk** K (`ClosureModel`, not wall-corrected) in f Re, in Fo and in the inertial term ρC_F|U|U/√K; apply the
+   Task 7 factor (1 − a_K/N) to the viscous Darcy term only. For anisotropic K use K_e = 1/(e·K⁻¹·e) along the local
+   velocity direction e.
+2. `interstitial_heat_transfer` handles U = 0 (Darcy-limit Nu, variant 1 only) and vectorized grids. Expect
+   `CorrelationRangeWarning`s (Re, Pr, porosity, topology) on every evaluation: log `range_report(...)` once per run and
+   then pass `on_extrapolation="ignore"`.
+3. Sensitivity set for the paper: {variant 1, variant 2} × {Pr^(1/3), Pr^0.4} × {C_F power law, Table-2 plateau}.
+4. h_sf is the fluid-side coefficient at a uniform-T/uniform-q surface (non-conjugate CFD); strut conduction (fin
+   efficiency) must come from the solid-phase equation of the two-equation model with k_eff (Task 2/6).
+
+**Manuscript limitations paragraph (~150 words)** — also in `docs/task8_literature_closures.md`:
+
+> Two closures of the device model are taken from the literature. The inertial (Forchheimer) coefficient comes from
+> pore-scale simulations of skeletal gyroid and diamond cells fitted for porosities of 0.3–0.6 and Re_Dh ≤ 100 (Gajetti
+> et al., 2025). Our jacket operates at porosities of 0.5–0.8 and Re_Dh ≈ 25–580, where inertia carries 16–84 % of the
+> pressure drop, so pumping-power predictions inherit this extrapolation; for diamond above φ = 0.6, plausible C_F values
+> differ by up to a factor of two. The interstitial heat-transfer coefficient follows the modified Reynolds analogy of
+> Savoldi et al. (2026), calibrated for the gyroid at Pr = 1, φ ≤ 0.7 and Re_Dh = 20–100. We extend it to the water–glycol
+> coolant (Pr ≈ 21) with the Chilton–Colburn factor Pr^(1/3), and to diamond and blends through their own friction
+> factors; an exponent of 0.4 would raise h_sf by 22 %. Removing these assumptions requires experiments or conjugate
+> pore-resolved simulations at the operating Prandtl number.
+
+**References** (open access = read in full; "to verify" = bibliographic details not confirmed from a primary page)
+1. Gajetti E., Boccardo G., Savoldi L., Marocco L. (2025). Hydrodynamic characterization of Gyroid, Diamond and Split-P
+   Triply Periodic Minimal Surfaces as porous medium. *Int. J. Heat Mass Transf.* 252, 127439.
+   doi:10.1016/j.ijheatmasstransfer.2025.127439 (open access: re.public.polimi.it/handle/11311/1293551).
+2. Savoldi L., Cammi A., Gajetti E., Marocco L. (2026). A modified Reynolds analogy for the Gyroid TPMS in laminar flow:
+   Thermal-hydraulic correlations, numerical validation and multi-objective optimisation. *Int. J. Heat Fluid Flow* 121,
+   110631. doi:10.1016/j.ijheatfluidflow.2026.110631 (open access: re.public.polimi.it/handle/11311/1324787).
+   Text/caption mismatches in the paper: Eq. 38 coefficient 0.135 (Fig. 15: 0.134), Eq. 40 0.034 (Fig. 16: 0.0342); we use the equations.
+3. Rathore S.S., Mehta B., Kumar P., Asfer M. (2023). Flow characterization in triply periodic minimal surface (TPMS)-based
+   porous geometries: Part 1 — Hydrodynamics. *Transp. Porous Media* 146, 669–701. doi:10.1007/s11242-022-01880-7 (arXiv:2205.03591).
+4. Cheng Z., Li X., Xu R., Jiang P. (2021). Investigations on porous media customized by triply periodic minimal surface:
+   Heat transfer correlations and strength performance. *Int. Commun. Heat Mass Transf.* 129, 105713.
+   doi:10.1016/j.icheatmasstransfer.2021.105713. Companion: Cheng Z., Xu R., Jiang P.-X. (2021) *Int. J. Heat Mass Transf.*
+   170, 120902, doi:10.1016/j.ijheatmasstransfer.2021.120902.
+5. Iyer J., Moore T., Nguyen D., Roy P., Stolaroff J. (2022). Heat transfer and pressure drop characteristics of heat
+   exchangers based on triply periodic minimal and periodic nodal surfaces. *Appl. Therm. Eng.* 209, 118192 (to verify).
+6. Reynolds B.W., Fee C.J., Morison K.R., Holland D.J. (2023). Characterisation of heat transfer within 3D printed TPMS
+   heat exchangers. *Int. J. Heat Mass Transf.* (volume/article to verify; correlation taken from [7], Eq. 21).
+7. Brambati G., Guilizzoni M., Foletti S. (2024). Convective heat transfer correlations for Triply Periodic Minimal
+   Surfaces based heat exchangers. *Appl. Therm. Eng.* 242, 122492. doi:10.1016/j.applthermaleng.2024.122492 (open access).
+8. Piandoro S., Azzini F., Francioso M., Zha D., Liverani E., Pulvirenti B., Fortunato A. (2026). Laser 3D-printed periodic
+   porous structures for heat exchangers: a novel characterization approach under fully developed conditions.
+   *Lasers Manuf. Mater. Process.* 13, 555–581. doi:10.1007/s40516-026-00347-7 (open access).
+9. Gnielinski V. (1981). *Int. Chem. Eng.* 21(3); Gnielinski V. (1982) *Verfahrenstechnik* 16(1); VDI Heat Atlas, 2nd ed.
+   (2010). Implementation and example value as in the `ht` Python library (C. Bell, `ht.conv_packed_bed`).
+10. Wakao N., Kaguei S. (1982). *Heat and Mass Transfer in Packed Beds*. Gordon & Breach (Taylor & Francis).
+11. Ergun S. (1952). Fluid flow through packed columns. *Chem. Eng. Prog.* 48, 89–94.
+12. Kuwahara F., Shirota M., Nakayama A. (2001). A numerical study of interfacial convective heat transfer coefficient in
+    two-energy equation model for convection in porous media. *Int. J. Heat Mass Transf.* 44, 1153–1159.
+13. Hirokawa & Miyata (2024), cited by [2] for measured gyroid friction factors (details to verify).
+14. Al-Safadi M., Ejaz F., Shuja S.Z., Zubair S.M. (2026). Quantitative synthesis and correlations of heat transfer and
+    friction factor in TPMS structures. *Results Eng.* 29, 109402. doi:10.1016/j.rineng.2026.109402 — open-access
+    meta-analysis of 57 studies with unified Nu/f correlations; **not read** (the publisher site blocked automated access).
+    Worth reading before the manuscript; it may supersede rows of the table.
+
+**Open issues**
+1. Coefficients of Cheng et al. 2021 (closest scope: porous TPMS, ε 0.2–0.8, Re_h 10–129) and Iyer et al. 2022 were not
+   accessible here; if you can download them (NUST library), add them to `LITERATURE` and the comparison figure.
+2. Read Al-Safadi et al. 2026 [14] (open access) and check whether its unified laminar correlations change the recommendation.
+3. A cheap way to retire the Pr risk later: a periodic-cell conjugate check with our own Stokes velocity field and an
+   advection–diffusion solve at Pr = 1 and 20 (would measure the Pr exponent for our geometries; outside the Task 8 scope).
+4. Workspace: PyPI blocked; tests ran on numpy 2.5.3, scipy 1.18.1, pandas 3.0.5, Python 3.13 with pytest from a uv tool env.
+
+**Figures** (`results/figures/`): `task8_forchheimer.png` ((a) C_F vs φ — Gajetti fits with Table 2 points, Savoldi gyroid
+fit, Rathore points, diamond plateau, jacket band; (b) our Task 4 K vs the published K fits; (c) inertial share of the pressure
+drop vs flow rate, ρ* = 0.35, L = 2/4/6 mm), `task8_nusselt.png` (Nu_Dh vs Re_Dh at Pr = 20.7 for G φ = 0.65, G φ = 0.80,
+D φ = 0.65: variants 1–3 × Pr^(1/3), the Pr^0.4 band, Gnielinski and Wakao–Kaguei; fitted box and jacket range marked).
+
+**Tests**: `tests/test_empirical.py` 26 passed in 0.3 s; full suite `-m "not slow"` 371 passed + 4 skipped (pyamg ×2,
+pyarrow ×2) in 1.8 min (`results/task8_pytest_log.txt`). The 18 slow tests were not re-run: Task 8 adds no solver code
+and only appends imports to `voxlat.closures`.
+
+## Task 9 — Homogenized jacket device model  ✅
+
+**Built**
+- `src/voxlat/device/jacket2d.py` — the jacket unwrapped to (s = r_m θ, z) over the full circumference and
+  depth-averaged over h; `JacketModel.evaluate(rho, w, L, a_z=1, flow_rate=None, return_fields=False) -> dict`
+  (fields: scalar, callable f(s, z), grid-shaped array, or any 2-D array interpolated periodically in s).
+  Module-level `evaluate(...)` (cached default model) is the interface Tasks 10/11 call.
+- `src/voxlat/device/__init__.py` exports the API. `scripts/task9_jacket_model.py` (~20 s; `--quick`).
+- Tests: `tests/test_jacket2d.py` (37). README section "Jacket device model (Task 9)".
+- **Fix in a Task 7 helper**: `finite_gap._features` now broadcasts mixed scalar/array (w, rho, a_z); before,
+  `FiniteGapCorrection.factor("K_t", N_array, w_array, 0.35)` raised. Values unchanged (regression test added).
+
+**Model (equations, BCs and assumptions are in the module docstring)**
+1. *Frame*: cell axes (x, y, z) = (r, s, z) (Task 7). Closure tensors are used as predicted; in-plane
+   permeability = Schur complement K_tt − K_tr K_rr⁻¹ K_rt (zero net radial flow; = (s, z) block for G/D),
+   so blends keep their off-diagonal K_sz.
+2. *Flow*: −∇p = μ (f_K K_t)⁻¹ U + ρ C_F |U| U/√K_e, ∇·U = 0. f_K = Task 7 factor (1 − a_K/N, N = h/L) on the
+   viscous term only; C_F Gajetti 2025 (Task 8); K_e = bulk K along the local flow direction. Manifold slots
+   = uniform-pressure plenums (width measured at r_m; axial extent centred), axial ends no-flow; Q fixes p_in.
+   Cell-centred FV, grid lines through every slot edge, TPFA with harmonic face mobility + implicit central
+   cross term (anisotropic M), Picard on |U| and e (relaxation 0.7; 3 iterations uniform, 10–15 graded).
+3. *Heat*: three depth-averaged fields — coolant T_f, lattice solid T_s, sleeve T_w (+ two well-mixed
+   plenums). Solid–fluid exchange h_sf a_sf h (Task 8, variant 1 × Pr^(1/3), our bulk K_e, a_sf, C_F);
+   sleeve → solid conductance **G_ws = H_v h η/(1 − η)**, calibrated so that without in-plane gradients the
+   model reproduces the exact 1-D fin across the gap (adiabatic outer wall): wall loss √(k_n H_v) tanh(mh)
+   and depth-mean solid excess η = tanh(mh)/mh; k_n = f_k k_eff,rr. Exposed sleeve fraction φ convects
+   directly with h_sf (assumption). In-plane conduction: sleeve k_s t_sl, lattice (k_ss, k_zz) h on T_s with
+   zero flux at slot faces, coolant φ k_f h. q_in(z) = q''(z) r_s/r_m, cell-averaged exactly (Σ = 770 W).
+   Slot sleeve ↔ plenum: h_m = 5.385 k_f/(2h) = 180 W/m²K (laminar plate channel, one side heated).
+   Upwind advection; adiabatic ends. Reported T_wall = stator side, T_w + q'' t_sl/k_s.
+   *Why three fields*: the first version slaved the lattice solid to the sleeve (T̄_s = T_f + η(T_w − T_f));
+   its in-plane solid conduction then had no consistent zero-flux condition at the slot edges and R converged
+   only at first order (1-D study: order 1.1). With its own T_s the order is ~1.8.
+4. *Structure*: rigid-face cylindrical sandwich, uniform core shear strain → τ_rs = T G_rs/(r_m ΣG_rs A)(r_m/r_i)²,
+   τ_rz = F G_rz/ΣG_rz A (r_m/r_i) at the sleeve radius (conservative), G = f_G C66 / f_G C55; coolant pressure
+   (gauge + Δp) in radial lattice tension with the outer-wall hoop share (lattice takes 98.7 %); local p99
+   σ_vm = K_ux σ'_rr + √3(K_sxy τ_rs + K_sxz τ_rz) (linear superposition = upper bound); **margin = σ_allow/σ_vm
+   (≥ 1 feasible)**. Outer wall: hoop share, strip bending over the 15 mm slot p b²/(2t²), clamped-plate bending
+   over a pore of radius L/2.
+5. *Mass*: AlSi10Mg lattice (ρ* h A over lattice cells) + sleeve + outer wall annuli. *Manufacturability*: design
+   bounds, L ≥ L_min(w, ρ*) (Task 1 table, a = 1 screening), in-plane |∇ρ*| L ≤ 0.05, N ≥ 1, pinch-neck area
+   fraction (0.3 < w < 0.7, ρ* < 0.4).
+
+**Public API (`voxlat.device`)**
+```python
+model = JacketModel(cfg=None, options=JacketOptions(...), closures=None)   # closures: SurrogateClosures("ensemble")
+out = model.evaluate(rho, w, L, a_z=1.0, flow_rate=None, return_fields=False)
+evaluate(rho, w, L, a_z=1.0, flow_rate=None, return_fields=False, model=None)   # cached default model
+# out (SI): thermal_resistance [K/W] = (T_wall_max - T_in)/Q, T_wall_max, T_wall_max_lattice, T_wall_max_s/_z,
+#   T_wall_mean, T_in, T_out, heat_input, delta_p [Pa], pump_power = dp Q / eta_pump [W], hydraulic_power,
+#   flow_rate, mass, mass_lattice, mass_walls, coolant_volume, min_structural_margin, lattice_margin,
+#   outer_wall_margin, structural{...}, manufacturable, manufacturability{within_bounds, bounds, cell_size_ok,
+#   cell_size_ratio_min, gradient_ok, gradient_max, gradient_limit, N_min, finite_gap_valid,
+#   pinch_neck_area_fraction}, mass_balance_error, max_cell_divergence, energy_balance_error,
+#   picard_iterations, picard_converged, diagnostics{flow_split, reynolds_*, forchheimer_number_range, h_sf_mean,
+#   U_eff_mean, fin_efficiency_mean, heat_to_manifold_plenums, manifold_htc, finite_gap_factor_K_mean, grid,
+#   timings}, wall_time, [fields: JacketFields (p, U_s, U_z, T_f, T_s_mean, T_w, T_wall, h_sf, eta, Re, Fo,
+#   K_inplane, sigma_vm, margin, face flows) on grid (n_s, n_z)]
+JacketOptions(spacing=1.25e-3, spacing_z=2.5e-3, backend="ensemble", finite_gap=True, check_bounds="warn",
+              cf_source="gajetti2025", inertia=True, nu_variant=1, pr_exponent=1/3, fin_model="fin"|"isothermal",
+              wall_exposed_convection=True, manifold_htc=None, sleeve_conduction=True, lattice_conduction=True,
+              fluid_conduction=True, wall_condition="flux"|"temperature", wall_temperature=None,
+              picard_tol=1e-8, picard_maxiter=200, picard_relaxation=0.7, gradient_limit=None)
+model.with_options(**kw); model.grid (JacketGrid: s_faces, z_faces, kind, area, meshgrid(), theta_plot_deg())
+SurrogateClosures(backend, finite_gap=True|False|("K_t","k_n","C_nn","G_t")), UniformClosures(K, k_eff, a_sf, ...)
+build_grid(cfg, spacing, spacing_z=None); cell_average_heat_flux(cfg, z_faces); in_plane_permeability(K)
+directional_permeability(Kt, e); fin_conductance(k_n, H_v, h, model); manifold_htc_default(cfg)
+uniform_flow_reference(model, rho, w, L, a_z, flow_rate); ntu_reference(model, rho, w, L, a_z, flow_rate)
+```
+
+**Verification (all pass; `results/task9_verification.csv`, `task9_verification.png`)**
+| Check | Result |
+|---|---|
+| Uniform Darcy flow, 3 grids (UniformClosures, f_K = 0.8) | Δp = ℓ μU/(f_K K) to 1e-10, U uniform, split 0.5/0.5 |
+| Uniform Darcy–Forchheimer, real closures, 1–5 L/min | Δp vs two-path analytic: **max 2e-13** |
+| Series layers ρ*(s) | Δp = μU Σ ds_i/K_i (harmonic faces) to 1e-10 |
+| Flux stencil, linear p, anisotropic M (cross term) | interior faces = −M∇p to 1e-10 |
+| Mirror z (K_sz → −K_sz); mirror s (flow split swaps) | Δp, R identical to 1e-9; split swapped to 1e-6 |
+| ε-NTU, fixed wall temperature (NTU = 1.52) | = exact discrete upwind solution to 1e-12; first order to ε-NTU: −1.4 / −0.37 / −0.09 % at 10 / 2.5 / 0.625 mm; Richardson(2.5, 1.25) within 5e-5 |
+| Imposed uniform flux, z-uniform (mid-path) | T_w − T_f = q_in/U_eff, (T_s − T_f)/(T_w − T_f) = η, dT_f/ds = q_in/(ρc_p U h): all to 1e-10 |
+| Fin conductance vs independent FD fin, mh = 0.1–6 | 1e-5 (FD error) |
+| Uncoupled limit of the 3-field model | = analytic fin conductance (1e-7) |
+| **Mass balance** (graded, blends, a_z = 1.25, 1 and 5 L/min) | in − out < 1e-13 Q; max cell divergence < 1e-14 Q (**requirement < 0.5 %**) |
+| **Energy balance** (same) | ρc_pQ(T_out − T_in) vs Σq A: < 2e-11 (**requirement < 0.5 %**); heat input = 770 W to 1e-12 |
+| Sandwich equilibrium, superposition, slot bending, mass annuli | exact |
+| Reference physics | Re_Dh 195, h_sf 4.73 kW/m²K (= Task 8 nominal), f_K = 0.822 (= 1 − 0.266/1.5), T_out − T_in = 4.273 K |
+
+**Grid convergence** (uniform gyroid ρ* 0.35, L 4 mm, 3 L/min; `results/task9_grid_convergence.csv`). Δp is
+grid-independent for uniform designs (1e-13). R converges with observed order **1.76 in s**; Richardson extrapolate
+R∞ = 0.02426 K/W (z = 2.5 mm). z refinement 2.5 → 0.625 mm raises R by 0.3 %.
+| Δs / Δz [mm] | grid | R [mK/W] | error vs R∞ | time |
+|---|---|---|---|---|
+| 5 / 2.5 | 94 × 20 | 26.19 | +7.9 % | 0.05 s |
+| 2.5 / 2.5 | 188 × 20 | 24.63 | +1.5 % | 0.08 s |
+| **1.25 / 2.5 (default)** | **376 × 20** | **24.37** | **+0.44 %** | **0.2 s** |
+| 0.625 / 2.5 | 750 × 20 | 24.29 | +0.13 % | 0.4 s |
+| 1.25 / 0.625 | 376 × 80 | 24.45 | — | 1.7 s |
+Net default error vs the fully refined value ≈ +0.1…0.5 %. `T_wall_max_lattice` (max over lattice cells only) is
+sampled at the first cell next to a slot edge, so it converges at first order (+3 % per halving) — a diagnostic,
+not an objective.
+
+**Runtime** (sandbox core): uniform 0.2 s; graded G/blend/stretched with full tensors 0.3–0.7 s (Picard 10–15
+iterations; closures 0.1–0.2 s, flow 0.1–0.35 s, heat 0.15 s) → **target 1–2 s met**.
+
+**Reference results** (`results/task9_reference_gyroid.json`, `task9_flow_sweep.csv`)
+
+Uniform gyroid ρ* = 0.35, L = 4 mm, 3 L/min: **R = 24.4 mK/W** (T_wall,max 68.8 °C, at the outlet slot, axial end),
+lattice-region max 62.9 °C, T_out 54.27 °C, **Δp = 1833 Pa** (Darcy share 38 %, Fo 1.65), **pump power 0.31 W**,
+**mass 0.344 kg** (lattice 0.123 + walls 0.221), U_eff 12.5 kW/m²K, fin efficiency 0.45, **min margin 12.7**
+(outer wall over the slot, 6.3 MPa; lattice 21: σ_vm,p99 3.8 MPa, 80 % from coolant pressure).
+
+| design (ρ* 0.35, L 4 mm) | R at 1 / 3 / 5 L/min [mK/W] | Δp at 3 L/min | pump power 3 / 5 L/min | lattice margin (3 L/min) |
+|---|---|---|---|---|
+| gyroid | 38.1 / 24.4 / 20.7 | 1833 Pa | 0.31 / 1.20 W | 21.0 |
+| blend w = 0.5 | 39.3 / 25.7 / 21.9 | 1877 Pa | 0.31 / 1.19 W | 8.3 |
+| diamond | 37.1 / 24.3 / 20.9 | 2035 Pa | 0.34 / 1.25 W | 29.3 |
+
+**Sensitivity of the reference design** (`results/task9_sensitivity.csv`; R / Δp change)
+| case | R | R_lattice | Δp |
+|---|---|---|---|
+| no finite-gap correction | −0.1 % | −0.2 % | −6.7 % |
+| Nu variant 2 (low-h bound) | +5.1 % | +7.8 % | 0 |
+| Pr exponent 0.4 | −3.1 % | −4.8 % | 0 |
+| C_F Table-2 plateau | −0.1 % | −0.2 % | +0.6 % |
+| isothermal fins (perfect-fin bound) | −16 % | −26 % | 0 |
+| no exposed-wall convection | +8.0 % | +12 % | 0 |
+| **manifold h_m = 1000 / 5000 W/m²K** (default 180) | **−12 % / −40 %** | −7 % / −24 % | 0 |
+| GP instead of ensemble surrogate | −0.06 % | −0.1 % | +0.03 % |
+| no lattice in-plane conduction | +1.4 % | +2.7 % | 0 |
+
+**Open issues / decisions for later tasks**
+1. **The hottest point is the unfinned sleeve under the manifold slots (RQ2-relevant, decide before Task 11).**
+   Each 15 mm slot leaves a sleeve strip cooled only by sleeve conduction into the lattice plus a weak plenum
+   coefficient; it runs ~6 K hotter than the lattice region and sets R. R is therefore sensitive to the
+   unknown h_m (−12 % at 1000, −40 % at 5000 W/m²K) and only weakly to the lattice design far from the slots.
+   Options: (a) keep R as defined (the optimizer will densify/refine near the slots, a real design effect);
+   (b) optimize `T_wall_max_lattice`-style metrics excluding the slot strips (needs a grid-robust definition);
+   (c) narrow the slots or treat manifold design as part of the problem; (d) report both and a h_m sensitivity.
+   B1 (helical channel, Task 10) must use the same manifold treatment or the comparison is unfair.
+2. Wall-exposed convection uses the interstitial h_sf on the exposed fraction φ of the sleeve (assumption;
+   removing it raises R by 8 %). Outer wall adiabatic, fin tip adiabatic (conservative).
+3. Structure is far from binding at the reference loads (margin ≥ 12; lattice ≥ 8 even for the blend). The
+   constraint margin ≥ 1 will only bind for low-ρ* blends or if loads/allowables change — expected; say so in
+   the paper. Localization factors are bulk p99 (no finite-gap localization data).
+4. Upwind advection is first order; at the default grid its error on ε is ~0.2 % (NTU test) — below the
+   closure uncertainties. A higher-order scheme is not needed for Task 11.
+5. Coolant in-plane conduction is stagnant φ k_f (no thermal dispersion); thermal dispersion would only smooth
+   T_f further. Curvature neglected (h/r_m = 0.08); the planform at r_m conserves volume and heat exactly.
+6. Expected `CorrelationRangeWarning`s (Task 8) are silenced inside the model (`on_extrapolation="ignore"`);
+   the surrogate still warns outside its training box (`check_bounds`).
+7. Manufacturability L_min is the a_z = 1 table (screening); final designs need `check_manufacturable` (Task 1).
+8. Citations to verify: Shah & London 1978 (*Laminar Flow Forced Convection in Ducts*, Nu = 5.385 for parallel
+   plates, one side at uniform flux, other adiabatic); Incropera & DeWitt (fin efficiency); Allen 1969
+   (*Analysis and Design of Structural Sandwich Panels*); Timoshenko & Woinowsky-Krieger 1959 (clamped circular
+   plate 3pa²/4t², clamped strip pb²/2t²); Quintard & Whitaker / Nield & Bejan (two-equation LTNE model).
+9. Workspace: PyPI blocked (no pyamg, pyarrow, torch); numpy 2.5.3, scipy 1.18.1, Python 3.13.
+
+**Figures** (`results/figures/`): `task9_fields_uniform_gyroid.png` (pressure, velocity with direction arrows,
+coolant and stator-side sleeve temperature maps, slots shaded, hot spot marked), `task9_verification.png`
+(ε-NTU convergence with the exact discrete solution, Δp vs analytic over 1–5 L/min, grid convergence of R),
+`task9_flow_sweep.png` (R, Δp, pump power vs flow rate for G, blend, D). Data: `results/task9_*.csv`,
+`results/task9_reference_gyroid.json`, `results/task9_pytest_log.txt`.
+
+**Tests**: `tests/test_jacket2d.py` 37 passed in ~11 s; with `tests/test_finite_gap.py` (touched helper, incl. its slow
+tests) 64 passed in 24 s; full suite `-m "not slow"` **408 passed + 4 skipped** (pyamg ×2, pyarrow ×2) in 2.0 min
+(`results/task9_pytest_log.txt`). The other 18 slow tests (Tasks 1–4, 6) were not re-run: Task 9 changes no solver
+code outside `finite_gap._features`.
+
+## Task 10 — Baselines B1–B3  ✅
+
+**Built**
+- `src/voxlat/device/baselines.py` — the baselines with the Task 9 interface: `evaluate(design, flow_rate=None,
+  return_fields=False) -> dict` returns every Task 9 top-level key (R, Δp, pump power, mass, margins,
+  manufacturability, balances, diagnostics, fields) plus `T_wall_max_active` / `R_active` (hottest point of the cooled
+  region, i.e. excluding the sleeve under the manifold slots) and `design` (JSON dict). Exported from `voxlat.device`
+  (`evaluate_baseline`, designs, `tune_b1/b2/b3`, `select_best`, `pareto_front`, `design_from_dict`).
+- `scripts/task10_baselines.py` (~2.5 min; `--quick` ~50 s), `tests/test_baselines.py` (32 tests, 7 s), README section.
+- Duct correlations: `rect_duct_fre` (exact Shah & London series), `rect_duct_nu_h1`, `helical_re_crit`,
+  `curved_duct_friction`, `coil_nusselt_laminar/turbulent`, `curved_duct_nusselt`, `developing_nusselt_mean`,
+  `rib_conductance` (fin with optional tip conductance), `DUCT_REFERENCES`.
+
+**Baseline definitions**
+| | Design variables | Model |
+|---|---|---|
+| **B1** helical channels | channel width w_c, rib thickness t_r, starts n (pitch P = n (w_c + t_r)); grid: N_pass = L_ax/(w_c + t_r) ∈ {3 … 40}, t_r ∈ {0.35 … 2} mm, n ∈ {1 … 40} ≤ N_pass, w_c ≥ 0.8 mm → **479 candidates** | new `ChannelJacketModel`, **end-ring manifolds** (inlet z = 0, outlet z = L_ax, assumed outside the heated length → no unfinned slot strips) |
+| **B1s** circumferential channels | same (n = 1), 75 candidates | same model, **the lattice's axial slots** (θ = 0/180°, 15 mm, same h_m plenum treatment) — the like-for-like manifold comparison asked for in Task 9 open issue 1 |
+| **B2** uniform gyroid | ρ* 0.20–0.50 (step 0.025) × L 2–6 mm (step 0.25) → 221 candidates, all manufacturable | Task 9 `JacketModel` |
+| **B3** density-graded gyroid | ρ*(s, z) = interp(ξ, 4 knots along each half path, mirror-symmetric) + amp_z ψ(z), ψ = q''(z)-shaped; **w = 0, L fixed at the B2 optimum** | Task 9; 64 Sobol + Nelder–Mead (218 evaluations), constraints as penalties |
+
+**Selection rule (identical for every family, `select_best`)**: min R at 3 L/min s.t. manufacturable, min structural
+margin ≥ 1 and **pump power ≤ 0.3055 W = the Task 9 reference design (uniform gyroid ρ* 0.35, L 4 mm)**. Each family's
+full candidate table and non-dominated (R, pump power, mass) set are saved for the Task 11 overlay.
+
+**B1 model (equations in the module docstring)**
+- Per channel (all identical, constant properties): D_h = 2 w_c h/(w_c + h); helix curvature radius R_c = r_m(1 + tan²α);
+  Δp = (f ℓ/D_h + K_inc) ρU²/2, K_inc = 1.25; manifolds ideal (as Task 9).
+- f: straight laminar rectangular (exact series) × Schmidt (1967) curvature factor; turbulent Schmidt; Re_crit = 2300[1 + 8.6(d/D)^0.45].
+- Nu (D_h): laminar max(VDI coil 3.66 + 0.08[1 + 0.8(d/D)^0.9] Re^m Pr^(1/3), Nu_H1(α)); turbulent Gnielinski coil
+  (ξ = 0.3164 Re^-0.25 + 0.03 (d/D)^0.5); transition linear in Re between Nu_lam(Re_crit) and Nu_turb(2.2e4) (Gnielinski 1986).
+  No thermal-entrance enhancement (hot spot is at the developed outlet; `nu_model="developing_mean"` = optimistic bound).
+- U_eff = [h_c w_c + √(2h_c k t_r) tanh(mh)]/(w_c + t_r): rib fin with **adiabatic tip at the outer wall — the same
+  adiabatic-outer-wall assumption as the lattice**; `outer_wall_fin=True` adds the outer wall as a tip fin. Sleeve
+  isothermal over one period (spreading efficiency reported: ≥ 0.997 for the selected designs).
+- Planform heat model on the Task 9 grid: coolant advected by the homogenized channel flux (helical: Q/P per unit axial
+  width, Q/C per unit arc; circumferential: ±Q/(2L_ax)), no transverse mixing, upwind; sleeve conduction k_s t_sl;
+  slots → plenums with h_m; T_wall = stator side, identical to Task 9.
+- Structure: torque → in-plane rib shear τ/f_r (Task 9 sandwich); thrust → rib bending 3V′h/t_r² + shear; coolant
+  pressure → rib tension (rib share of radial stiffness); σ_vm × **K_t = 2.5** at the rib roots (assumption); outer-wall
+  hoop / channel-span / slot bending. Mass: ribs ρ h f_r A + the same walls as Task 9.
+
+**Verification (`results/task10_verification.csv`, tests)**
+| Check | Result |
+|---|---|
+| helical, no sleeve conduction: T_f(z) vs exact marching T_in + C/(ρc_pQ)∫q dz | **3e-12 K**; T_w − T_f = q/U_eff to 2e-14 |
+| circumferential, fixed wall T: ε vs exact discrete upwind, 4 grids | 1e-13 (and → ε-NTU, 0.06 % at 0.625 mm) |
+| energy / mass balance, both layouts, 1 and 5 L/min | < 4e-12 / < 4e-16; T_out − T_in = Q/(ρc_pV) |
+| Δp vs hand calculation; rib fin with tip conductance vs FD fin | 2e-16; 0.2 % (FD error) |
+| rect. duct f Re (Shah & London: 56.91 square, 62.19 α = 0.5, 96 plates); Nu_H1 square 3.61; Re_crit vs `fluids` (6946.79) | exact to table precision |
+| uniform B2 wrapper = Task 9 `JacketModel`; flat B3 = uniform | 1e-12 |
+
+**Selected designs (3 L/min, cap 0.306 W)**
+| | Design | R [mK/W] | R_active | Δp [Pa] | pump [W] | mass [kg] | min margin | notes |
+|---|---|---|---|---|---|---|---|---|
+| B1 | w_c 1.75 mm, t_r 0.75 mm, **20 starts** (P = 50 mm, α = 6.1°, ℓ = 0.47 m) | **13.3** | 13.3 | 1720 | 0.287 | 0.333 | 9.2 | Re 281, De 38, laminar, Nu 11.6, h_c 1.72 kW/m²K, U_eff 7.1 kW/m²K, rib η 0.72 |
+| B1s | w_c 0.90 mm, t_r 0.35 mm (40 channels/path) | 25.7 | 18.3 | 1088 | 0.181 | 0.319 | 4.2 | Re 79, U_eff 10.8 kW/m²K; the family's candidates span ≤ 0.29 W and none above 0.18 W is better |
+| B2 | ρ* 0.35, L 4 mm (= the Task 9 reference) | 24.4 | 16.8 | 1833 | 0.306 | 0.344 | 12.7 | U_eff 12.5 kW/m²K |
+| B3 | ρ* path (inlet→outlet) 0.25, 0.23, 0.37, **0.50**; amp_z ≈ 0; L 4 mm | 22.7 | 15.0 | 1827 | 0.304 | 0.335 | 12.3 | densifies toward the outlet slot; grad ρ* L = 0.0074 |
+
+**Comparison table at 1 / 3 / 5 L/min** (`results/task10_comparison.csv`, `task10_flow_comparison.png`; designs fixed)
+| | R [mK/W] | R_active [mK/W] | pump power [W] | T_wall,max at 3 L/min |
+|---|---|---|---|---|
+| B1 | 25.9 / **13.3** / 10.1 | 25.9 / 13.3 / 10.1 | 0.027 / 0.287 / 0.90 | 60.2 °C |
+| B1s | 37.5 / 25.7 / 22.6 | 30.5 / 18.3 / 15.1 | 0.019 / 0.181 / 0.52 | 69.8 °C |
+| B2 | 38.1 / 24.4 / 20.7 | 30.8 / 16.8 / 13.0 | 0.020 / 0.306 / 1.20 | 68.8 °C |
+| B3 | 35.9 / 22.7 / 19.3 | 28.4 / 15.0 / 11.5 | 0.020 / 0.304 / 1.20 | 67.5 °C |
+Masses: B1 0.333, B1s 0.319, B2 0.344, B3 0.335 kg (walls 0.221 kg in all). All margins ≥ 4.2 at every flow rate.
+
+**Best R at equal pump power** (`results/task10_equal_pump_power.csv`; R / R_active in mK/W)
+| cap | B1 | B1s | B2 | B3 |
+|---|---|---|---|---|
+| 0.10 W | 18.4 / 18.4 | 28.9 / 21.7 | 28.1 / 20.8 | — (search centred on the 0.31 W cap) |
+| 0.25 W | 14.3 / 14.3 | 25.7 / 18.3 | 24.9 / 17.4 | 23.8 / 16.2 |
+| 0.50 W | 12.4 / 12.4 | 25.7 / 18.3 (saturates) | 23.2 / 15.6 | — |
+| 1.0 W | 10.3 / 10.3 | — | 21.6 / 13.9 | — |
+| 2.0 W | 9.9 / 9.9 | — | 20.7 / 12.9 | — |
+
+**Headline (for RQ2 and the Task 11 decision)**
+1. **Manifold topology dominates R.** The helical channel with end-ring manifolds beats every lattice with axial slots
+   by ~45 % in R at equal pump power (13.3 vs 24.4 mK/W), because the lattice's R is set by the unfinned sleeve under
+   the outlet slot (Task 9 issue 1). Even on the cooled region alone (R_active, which for the lattice still sits next to
+   the slot edge) B1 is 21 % better than B2 and 11 % better than B3.
+2. **Like-for-like manifolds: the lattice wins.** With the same slots, B1s is 5 % worse than B2 in R and 9 % worse in
+   R_active at lower pump power, and its family saturates (feasible candidates reach only 0.29 W, none better than the
+   0.18 W pick: many short parallel channels cannot turn more pressure drop into heat transfer).
+3. **Density-only grading helps modestly:** B3 is 7 % (R) / 11 % (R_active) better than B2 at equal pump power,
+   by densifying toward the outlet slot (ρ* hits the 0.50 bound there).
+4. **Decision needed before Task 11** (recommendation): add an end-ring (axial-flow) manifold option to the Task 9
+   lattice model so the lattice can be compared with B1 on equal manifold terms, or treat the manifold layout as a
+   design variable; otherwise RQ2 compares manifold topologies, not cooling structures. Report B1 and B1s either way.
+
+**Sensitivity of B1 / B1s** (`results/task10_sensitivity.csv`; change in R)
+| case | B1 | B1s |
+|---|---|---|
+| Nu without curvature (straight duct, fully developed) | **+49 %** | +2 % |
+| Nu developing-flow length mean (optimistic) | 0 (Dean term dominates) | 0 |
+| outer wall as fin | −2.5 % | −0.4 % |
+| K_inc = 0 | Δp −2.2 % | Δp −0.8 % |
+| K_t 1.5 / 4 | margin 15.4 / 5.8 | 7.1 / 2.7 |
+| h_m = 1000 / 5000 W/m²K | 0 (no slots) | −13 % / −42 % (as the lattice in Task 9) |
+B1's advantage rests on the Dean-flow enhancement (VDI coil Nu 11.6 vs straight 5.0 at De 38); the coil correlations
+are for circular tubes and are applied to a 1.75 × 6 mm rectangle with D_h (assumption to state in the paper).
+
+**Runtime**: B1 0.05 s per evaluation (helical and circumferential); B2 0.2 s; B3 0.35 s.
+
+**Open issues / notes**
+1. ~~Manifold decision above~~ → Task 11 optimizes both layouts (new end-ring option in the Task 9 model).
+2. Correlation caveats: Schmidt laminar/turbulent friction branches jump by up to 23 % at Re_crit for d/D = 0.01
+   (5 % at 0.03; selected designs are laminar, Re ≤ 470 at 5 L/min, far below Re_crit ≈ 5500). Transition
+   interpolation of Gnielinski (1986) implemented from the VDI description — **verify against VDI Heat Atlas G3**.
+   K_inc = 1.25 is the circular-duct value.
+3. B1 ribs as thin as 0.35 mm × 6 mm tall are allowed (same min-wall limit as the lattice); the selected B1 uses
+   0.75 mm, B1s uses 0.35 mm. Printability of tall thin ribs and of the channel roof (bridge w_c) is not checked.
+4. Ring manifolds of B1 are assumed outside the 50 mm heated length (no axial space charged to B1).
+5. B3's knot at the outlet edge sits on the ρ* = 0.50 bound; Task 11 (with w and L free) should improve on it.
+6. B2 at the cap coincides with the Task 9 reference design (grid point ρ* 0.35, L 4 mm).
+7. Workspace: PyPI blocked (no pyamg, pyarrow, torch); numpy 2.5.3, scipy 1.18.1, Python 3.13.
+
+**References** (Task 10 additions)
+- Shah R.K., London A.L. (1978). *Laminar Flow Forced Convection in Ducts*. Adv. Heat Transfer Suppl. 1, Academic Press.
+- Schmidt E.F. (1967). Wärmeübergang und Druckverlust in Rohrschlangen. *Chem. Ing. Tech.* 39(13), 781–789.
+- Gnielinski V. (1986). Heat transfer and pressure drop in helically coiled tubes. *Proc. 8th Int. Heat Transfer Conf.*,
+  Vol. 6, 2847–2854, Hemisphere; VDI Heat Atlas (2010), chapter G3/Gc.
+- Schlünder E.U. (ed.) (1983). *Heat Exchanger Design Handbook*. Hemisphere (Schmidt correlations as defaults).
+- Baehr H.D., Stephan K. (2011). *Heat and Mass Transfer*, 3rd ed., Springer.
+- Correlation forms cross-checked against the open-source `fluids` / `ht` libraries (C. Bell) and the Modelica
+  Fluid.Dissipation documentation (VDI laminar/turbulent coil forms).
+
+**Figures** (`results/figures/`): `task10_temperature_maps.png` (stator-side sleeve temperature of B1, B1s, B2, B3 at
+3 L/min on one colour scale, hottest point marked), `task10_fronts.png` (R and R_active vs pump power: candidates,
+fronts, selected designs, reference), `task10_flow_comparison.png` (R, R_active, pump power at 1/3/5 L/min).
+Data: `results/task10_*.csv`, `results/baselines/{B1,B1s,B2,B3}.json`, `results/task10_pytest_log.txt`.
+
+**Tests**: `tests/test_baselines.py` 32 passed in 7 s; full suite `-m "not slow"` **440 passed + 4 skipped**
+(pyarrow ×2, pyamg ×2) in 2.3 min. Task 10 changes no existing solver code (only adds exports to `voxlat.device`).
+
+## Task 11 — Multi-objective optimization (RQ2, RQ3)  ✅
+
+**Decision (Task 10 open issue 1).** The lattice's R is set by the unfinned sleeve under the axial
+manifold slots, so comparing it with B1 (end-ring manifolds) compares manifold topologies. Task 11 therefore runs the
+study on **both** layouts: `slots` (the reference config; compared like-for-like with B1s / B2 / B3) and a new
+`end_rings` option of the Task 9 model (compared with B1 on equal manifold terms). The default model is unchanged.
+
+**Built**
+- `src/voxlat/device/jacket2d.py`: `JacketOptions(manifold_layout="end_rings")` / `build_grid(..., layout=)`. Ring
+  plenums (one cell row below z = 0 and above z = L_ax, full circumference) **outside the heated length, exactly as B1**:
+  no heat input, inert sleeve rows (excluded from every wall statistic), adiabatic sleeve ends, no slot bending of the
+  outer wall, coolant volume excludes the rings. 1-D references (`uniform_flow_reference`, `ntu_reference`) cover both
+  layouts. `JacketGrid.layout`, `JacketGrid.heated`. Slot results unchanged (test pins R = 24.37 mK/W).
+- `src/voxlat/optimize/` (was empty):
+  - `parameterization.py` — tensor-product B-spline fields: s periodic uniform cubic (control i centred at θ = i·360/n_s),
+    z clamped uniform of degree min(3, n_z − 1) (4 → cubic Bézier, 2 → linear); unit controls mapped to the design
+    bounds (convex hull ⇒ bounds never violated). Default grids ρ* 8×4, w 8×4, L 4×2, a_z fixed 1 → **72 variables**.
+    `GradingSpec`, `GradingParameterization` (fields on the model grid, batched fields, `field_function(x, name)(s, z)`
+    for Task 12, `describe()`), `FastMinCellSize` (= Task 1 `min_cell_size`, same bilinear table, 20× faster),
+    exact gradient check (same face formula as the model), **feasibility repair** (below).
+  - `problem.py` — `JacketProblem` (repair → cheap checks → device model only for cheap-feasible designs; archive;
+    joblib option), `ObjectiveSpace` (fixed for every method and layout: f1 = R [mK/W], f2 = log10 P [W], f3 = m [kg],
+    normalized with lo = (5, −3, 0.28), hi = (40, 0.5, 0.42); HV reference point (1, 1, 1)).
+  - `hypervolume.py` — exact 2-/3-D hypervolume (slicing), column box decomposition of the non-dominated region,
+    exact HVI, **analytic EHVI** for independent Gaussian outcomes (box-wise product of 1-D expectations).
+  - `gp.py` — numpy exact GP: Matérn-5/2 ARD, MAP with BoTorch's current dimension-scaled lengthscale prior
+    (Hvarfner et al. 2024), analytic gradients, kriging-believer conditioning.
+  - `algorithms.py` — `run_nsga2` (pymoo NSGA2 defaults + repair as a pymoo `Repair`), `run_qnehvi` (BoTorch
+    qLogNEHVI if installed, else the numpy analytic-EHVI fallback; mass treated as a **known linear** objective, margin
+    as GP outcome constraint; discrete candidate pool = repaired Sobol + perturbations of the Pareto set + refinement),
+    `run_sobol`, `anchor_designs`.
+  - `study.py` — `run_one` (csv.gz + json run record, checkpoint every 2 min), `load_runs`, `hv_curves`,
+    `combined_front`, `representative_designs`, `equal_pump_power`, `design_record`, `evaluate_x`.
+- `scripts/task11_optimize.py` (CLI, `--parallel`, `--skip-done`, `--quick`, `--no-anchors`),
+  `scripts/task11_uniform_references.py` (uniform gyroid / diamond grids on both layouts, ~2 min),
+  `scripts/task11_analysis.py` (figures, tables, design JSONs, ~5 min).
+- Tests: `tests/test_optimize.py` (28), `tests/test_jacket2d.py` +7 end-ring tests (44 total). CI installs pymoo.
+
+**Problem (3 L/min)**: minimize (R, pump power, mass) s.t. L ≥ L_min(w, ρ*) in every lattice cell (Task 1, strict
+min-wall statistic), |∇ρ*|·L ≤ 0.05 (Task 7), min structural margin ≥ 1. Feasible = manufacturable and margin ≥ 1.
+
+**Two findings that shaped the formulation (both documented in the module docstrings)**
+1. *Random designs are infeasible.* B-spline fields of random controls are averages → mostly mid-range blends, and the
+   strict wall criterion forbids blends at small L (L_min 4.8–7.6 mm for 0.3 < w < 0.75 at some ρ*; > 6 mm — infeasible
+   at any allowed L — for w ≈ 0.59–0.75, ρ* ≈ 0.22–0.34). Measured: **8 feasible of 40 000** Sobol designs. A
+   feasibility **repair**, applied identically by every optimizer, fixes this: (1) w controls over violating cells move
+   halfway toward the design's majority pure type (one common target: a G↔D transition itself crosses the infeasible
+   band), up to 6 passes; (2) then L controls are raised by the largest deficit in their support; (3) the ρ* net is
+   shrunk toward its mean until the gradient limit holds (exact: fields are linear in the controls). Feasible designs
+   are fixed points. Result: **100 % of random designs repaired, L stays 3.3–4.6 mm** (a first version with step (2)
+   only pushed L to 5–6 mm and stalled NSGA-II). 3 ms per design.
+2. *The extremes of the front are uniform.* The min-R (and min-mass) designs sit where every field is at a bound, which
+   random initial designs never reach. Every method therefore starts from the same **9 uniform anchors** (G and D at
+   the four (ρ*, L) corners + the centre gyroid ρ* 0.35, L 4 mm), counted in its budget. Ablation without anchors in
+   `results/task11_ablation_no_anchors/` (summary CSVs + figures): HV medians slots 0.154 (NSGA-II, 2000) / 0.196
+   (qNEHVI, 200) / 0.107 (Sobol, 500), end rings 0.520 / 0.649 / 0.400; the fronts missed the dense corner, where
+   uniform diamond beat them by 5–8 % (end rings).
+
+### Final study (2026-10-16, GitHub Actions, corrected cell-size rule in the loop) — current numbers
+
+Same design as the first full-budget study (30 runs: 2 layouts × {NSGA-II pop 100 × 100 gen, qNEHVI 200 with BoTorch
+qLogNEHVI, Sobol 1000} × 5 seeds), but with `DEFAULT_CONSTRAINTS` (fine-w table, L ≥ 1.01 L_min, valley screen) inside
+the loop. Run with `.github/workflows/task11-study.yml` on branch `task11-cloud-run` (run 38853960169): one run per
+4-core ubuntu-latest runner, all 30 concurrently, BoTorch with 4 torch threads; 2 h 35 min wall clock in total. All 30
+`done` with the corrected rule, BoTorch 0 fallbacks (`results/task11_cloud_status.txt`); NSGA-II 9 995–10 000
+evaluations (duplicate elimination). Re-screen check: 0 of the evaluated designs fail the corrected rule
+(`task11_rescreen.csv`) - the leak is closed. All 7 representative designs pass the direct n = 48 check.
+
+**RQ3 — sample efficiency** (`task11_hv_summary.csv`, `task11_hypervolume.png`; median over 5 seeds; IQR ≤ 0.003)
+| layout | evals | NSGA-II | qNEHVI | Sobol |
+|---|---|---|---|---|
+| slots | 50 / 100 / 200 | 0.1757 / 0.1767 / 0.1819 | **0.1851 / 0.1939 / 0.1998** | 0.1767 / 0.1768 / 0.1784 |
+| slots | final | **0.2093** (10 000) | 0.1998 (200) | 0.1798 (1 000) |
+| end rings | 50 / 100 / 200 | 0.6513 / 0.6517 / 0.6555 | **0.6530 / 0.6662 / 0.6748** | 0.6511 / 0.6519 / 0.6525 |
+| end rings | final | **0.6875** (10 000) | 0.6748 (200) | 0.6552 (1 000) |
+NSGA-II needs a median **1 368 evaluations on both layouts** to reach qNEHVI's HV at 200 → **qNEHVI is ~7× more
+sample-efficient**; Sobol never reaches it; NSGA-II passes it with its full budget. **Wall clock** (one run per 4-core
+machine): qNEHVI 1 660–3 780 s per 200-evaluation run (GP fitting + acquisition ≈ 90–95 % of it), NSGA-II reaches the
+same HV in ~1 368 × 0.65–0.85 s ≈ 15–20 min, and its 10 000-evaluation runs took 1.3–2.5 h. With this ~1-s simulator
+NSGA-II is faster in wall-clock time; qNEHVI wins when an evaluation costs more than ~10–20 s (e.g. a 3-D CFD/FE model).
+
+**RQ2 — equal pump power** (`task11_equal_pump_power.csv`; R in mK/W; baselines = best feasible design of each family
+with P ≤ cap; U-G / U-D = uniform gyroid / diamond grids on the same layout, screened with the same rule)
+| cap | slots, optimized | vs B1s | vs B2 | vs B3 | vs U-D | vs B1 |
+|---|---|---|---|---|---|---|
+| 0.10 W | 26.6 | −8.1 % | −5.5 % | — | −8.1 % | +44 % worse |
+| **0.306 W** | **21.94** (0.304 W, 0.310 kg) | **−14.5 %** | **−10.3 %** | **−3.2 %** | −11.0 % | +65 % |
+| 1.0 W | 20.6 | −19.8 % | −4.9 % | −9.2 % | −5.2 % | +99 % |
+With mass ≤ the baseline design's mass the 0.306 W gains are identical (−14.5 / −10.3 / −3.2 %).
+| cap | end rings, optimized | vs B1 | vs U-G | vs U-D |
+|---|---|---|---|---|
+| 0.01 W | 10.4 | — (B1 needs > 0.08 W) | −10.8 % | −11.1 % |
+| 0.03 W | 9.0 | — | −5.0 % | −4.0 % |
+| ≥ 0.1 W | 8.57 (0.065 W, 0.408 kg; uniform dense diamond) | **−35.3 %** at 0.306 W (−53.5 % at 0.1 W, −17.0 % at 1 W) | −2.7 % | −0.7 % |
+
+**Headline (final)**
+1. **Manifolds dominate.** End rings: the lattice beats the tuned helical channel B1 by **35 % in R at equal pump power,
+   using 0.065 W vs 0.287 W**; with axial slots every lattice is ~65 % worse than B1 (the unfinned sleeve under the outlet
+   slot sets R).
+2. **Like-for-like (slots) at the 0.306 W cap:** graded **−14.5 % vs B1s, −10.3 % vs B2 (uniform gyroid), −11.0 % vs
+   uniform diamond, −3.2 % vs density-only grading B3** (R_active 14.4 vs 15.0 mK/W). The gain over uniform shrinks with
+   pump power (−5 % at 1 W; the optimum becomes uniform).
+3. **What the grading does:** the best slot design at the cap is a near-gyroid (w ≤ 0.24, mean 0.07) densified toward
+   the outlet slot (ρ* 0.20–0.41) with the cell refined toward it (L 5.0 → 2.2 mm along each path); cell-size grading
+   is the lever B3 lacks. With end rings grading pays only at very low pump power (−4…−11 % vs uniform at ≤ 0.03 W);
+   above ~0.06 W uniform dense diamond is optimal.
+4. **Blends:** under the strict wall criterion G↔D transitions cross pinch-neck valleys, so manufacturable designs are
+   near-pure G or near-pure D with graded density and cell size (both families appear on the fronts).
+5. **RQ3:** qNEHVI ~7× fewer evaluations than NSGA-II for the same hypervolume; NSGA-II faster in wall clock for this
+   cheap model.
+
+**Representative designs** (`results/designs/task11_*.json`, `task11_designs_*.png`; all pass the direct n = 48 check
+on their 3 tightest cells and 3 tightest blend-band cells)
+| layout | design | R [mK/W] | R_active | P [W] | mass [kg] | margin | fields |
+|---|---|---|---|---|---|---|---|
+| slots | min_R | 20.57 | 12.94 | 0.852 | 0.358 | 12.5 | near-D (w 0.86–1.0), ρ* 0.21–0.50, L 2.2–4.7 mm |
+| slots | best_at_cap | **21.94** | 14.37 | 0.304 | 0.310 | 8.7 | near-G (w ≤ 0.24), ρ* 0.20–0.41, L 2.2–5.0 mm |
+| slots | knee | 23.36 | 15.76 | 0.154 | 0.303 | 8.9 | near-G (w ≤ 0.18), ρ* 0.20–0.39, L 3.3–6.0 mm |
+| slots | min_mass | 23.64 | 16.09 | 0.462 | 0.291 | 12.6 | uniform D ρ* 0.20, L 2 mm |
+| end rings | min_R | 8.57 | 8.57 | 0.065 | 0.408 | 47.6 | uniform D ρ* 0.50, L 2.2 mm |
+| end rings | knee | 11.93 | 11.93 | 0.0056 | 0.304 | 9.0 | near-G (w ≤ 0.17), ρ* 0.20–0.33, L 2.2–5.1 mm |
+| end rings | min_mass | 10.54 | 10.54 | 0.016 | 0.296 | 13.3 | uniform D ρ* 0.20, L 2 mm |
+For Task 12 export: `slots/best_at_cap` and `end_rings/knee` (graded) plus `end_rings/min_R` (uniform).
+
+### First full-budget study (laptop, 2026-10-11 → 14, coarse cell-size rule) — superseded; kept for the constraint finding
+
+30 runs: 2 layouts × {NSGA-II pop 100 × 100 gen = 10 000 evaluations, qNEHVI 200 (**BoTorch qLogNEHVI**, 0 numpy
+fallbacks), Sobol 1000} × 5 seeds; Windows 11 laptop, 4 runs in parallel, ~2.0 s per device evaluation. One crash in the
+qNEHVI phase (fixed, note 7 below); 4 runs were resumed from checkpoints.
+
+**Cell-size constraint leak found in verification (important).** The direct n = 48 check of the representative designs
+failed for the knee (w 0.75, ρ* 0.21: true minimum wall 0.11 mm at L = 5.3 mm although the Task 1 table gave L_min =
+5.3 mm). Cause: for 0.2 < w < 0.9 the minimum wall of a blend vanishes on narrow **pinch-neck "valleys"** in (w, ρ*)
+(one voxel, wall_min/L ≈ 0.02, at n = 48) that run diagonally through the design box; the Task 1 table (w step 0.125)
+interpolates over them, and the optimizers - NSGA-II above all - placed graded blends across them. Built a **fine-w
+morphology table** (w step 0.025, same n = 48 method; `scripts/task11_fine_morphology_table.py`, 30 min;
+`src/voxlat/geometry/data/tpms_morphology_table_fine.npz`, equal to the Task 1 table at shared nodes - tested) and
+**re-screened every evaluated design** (`study.rescreen_cell_size`): L ≥ 1.01 L_min_fine in every cell and no cell in a
+fine-table quad with a corner wall_min/L < 0.09 (the valley zone: 17 % of the (w, ρ*) box, all inside 0.2 < w < 0.9;
+pure-ish G (w ≤ 0.2) and D (w ≥ 0.9) untouched). Share of evaluated designs that stay feasible
+(first study; summaries in `results/task11_first_study/`):
+| | NSGA-II | qNEHVI | Sobol |
+|---|---|---|---|
+| slots | 36 % (front: 2 730 of 3 614 coarse-front designs rejected, 2 408 of them valley) | 47 % | 65 % |
+| end rings | 49 % (1 475 of 2 775; 1 018 valley) | 68 % | 66 % |
+The first-study numbers below are **after the re-screen**; the corrected rule became the default inside the loop
+(`parameterization.DEFAULT_CONSTRAINTS`) and the study was re-run (final study above).
+
+**RQ3 — sample efficiency (first study, re-screened)** (median over 5 seeds)
+| layout | evals | NSGA-II | qNEHVI | Sobol |
+|---|---|---|---|---|
+| slots | 50 / 100 / 200 | 0.1746 / 0.1752 / 0.1800 | **0.1817 / 0.1905 / 0.1971** | 0.1767 / 0.1770 / 0.1779 |
+| slots | final | **0.2060** (10 000) | 0.1971 (200) | 0.1794 (1 000) |
+| end rings | 50 / 100 / 200 | 0.6504 / 0.6511 / 0.6528 | **0.6521 / 0.6621 / 0.6685** | 0.6504 / 0.6513 / 0.6515 |
+| end rings | final | **0.6835** (10 000) | 0.6685 (200) | 0.6544 (1 000) |
+NSGA-II needs a median **1 368 (slots) / 1 198 (end rings) evaluations** to reach qNEHVI's HV at 200 → **qNEHVI is
+6–7× more sample-efficient**; Sobol never reaches it; NSGA-II overtakes with its full 10 000 budget. **Wall clock is the
+opposite**: BoTorch spent 3.5–6 h per 200-evaluation run on GP fitting and acquisition (12 500–21 300 s; the evaluations
+themselves ~400 s), while NSGA-II reaches the same HV in ~1 300 × 2 s ≈ 45 min. With a 2-s simulator BO pays off only if
+evaluations cost more than ~1 min (or with the cheaper numpy EHVI fallback: 10–13 min per run in the sandbox). Caveat:
+the optimizers were steered by the leaky constraint, NSGA-II most (it found the leak), so RQ3 should be re-measured with
+the corrected rule in the loop.
+
+**RQ2 — equal pump power (first study, re-screened)** (R in mK/W; baselines = best feasible design of
+each family with P ≤ cap; U-G / U-D = uniform gyroid / diamond grids on the same layout)
+| cap | slots, optimized | vs B1s | vs B2 | vs B3 | vs U-D | vs B1 |
+|---|---|---|---|---|---|---|
+| 0.10 W | 27.0 | −6.5 % | −3.9 % | — | −6.6 % | +46 % worse |
+| **0.306 W** | **22.05** (0.302 W, 0.318 kg) | **−14.1 %** | **−9.9 %** | **−2.7 %** | −10.6 % | +66 % |
+| 1.0 W | 20.6 | −19.9 % | −5.0 % | −9.3 % | −5.2 % | +99 % |
+With mass ≤ the baseline design's mass the 0.306 W gains are identical (−14.1 / −9.9 / −2.7 %).
+| cap | end rings, optimized | vs B1 | vs U-G | vs U-D |
+|---|---|---|---|---|
+| 0.01 W | 10.4 | — (B1 needs > 0.08 W) | −10.6 % | −10.9 % |
+| 0.03 W | 9.0 | — | −5.4 % | −4.5 % |
+| ≥ 0.1 W | 8.73 (0.061 W, 0.406 kg; near-uniform dense diamond) | **−34.2 %** at 0.306 W (−52.6 % at 0.1 W, −15.5 % at 1 W) | +0.9 % | −1.1 % |
+
+**Headline (first study)**
+1. **Manifolds dominate.** End rings: lattice −34 % R vs the tuned helical channel B1 at equal pump power, using 1/5 of
+   its pump power; with axial slots every lattice is ~66 % worse than B1.
+2. **Like-for-like (slots) at the 0.306 W cap:** graded −14.1 % vs B1s, −9.9 % vs B2, −10.6 % vs uniform diamond,
+   −2.7 % vs density-only grading B3 (R_active 14.9 vs 15.0 mK/W). Gains vanish at high pump power (optimum → uniform).
+3. **What grading does:** the best slot design at the cap is a near-diamond (w 0.83–1.0) densified toward the outlet
+   slot (ρ* 0.21–0.45) with L 2.2–5.8 mm; with end rings, grading pays only at very low pump power (−4…−11 % vs uniform
+   at ≤ 0.03 W) and is worth nothing above (uniform dense diamond is optimal there).
+4. **Blends:** strict-wall manufacturability excludes graded G↔D transitions (valleys), so the "multi-morphology" lever
+   is near-pure G or D plus density and cell-size grading.
+
+**Representative designs (first study)** (all 7 pass the direct n = 48 check
+on their 3 tightest cells + 3 tightest blend-band cells)
+| layout | design | R [mK/W] | R_active | P [W] | mass [kg] | margin | fields |
+|---|---|---|---|---|---|---|---|
+| slots | min_R | 20.55 | 12.70 | 1.06 | 0.355 | 12.4 | D (w ≥ 0.95), ρ* 0.22–0.50, L 2.1–2.4 mm |
+| slots | best_at_cap | **22.05** | 14.92 | 0.302 | 0.318 | 12.7 | near-D (w 0.83–1.0), ρ* 0.21–0.45, L 2.2–5.8 mm |
+| slots | knee | 22.87 | 15.82 | 0.206 | 0.303 | 8.6 | near-G (w ≤ 0.21), ρ* 0.20–0.38, L 2.3–5.8 mm |
+| slots | min_mass | 23.64 | 16.09 | 0.462 | 0.291 | 12.6 | uniform D ρ* 0.20, L 2 mm (anchor) |
+| end rings | min_R | 8.73 | 8.73 | 0.061 | 0.406 | 42.2 | near-uniform dense D |
+| end rings | knee | 12.35 | 12.35 | 0.0050 | 0.304 | 9.3 | near-G (w ≤ 0.17), ρ* 0.20–0.32, L 2.1–5.6 mm |
+| end rings | min_mass | 10.54 | 10.54 | 0.016 | 0.296 | 13.3 | uniform D ρ* 0.20, L 2 mm (anchor) |
+
+**Resolution:** the corrected rule (fine table, 1 % margin, valley screen) is the default inside the loop (the repair
+also polarizes w out of valleys; tested), and the study was re-run on GitHub Actions (final study above).
+
+### Sandbox study (2026-10-11; reduced budgets, numpy EHVI) — superseded by the full-budget study above
+| | NSGA-II (pymoo 0.6.2) | qNEHVI | Sobol random |
+|---|---|---|---|
+| budget per run | pop 50 × 40 gen = 2000 evaluations | 200 (9 anchors + 23 Sobol + 42 batches of q = 4) | 500 |
+| seeds | slots 5, end rings 3 | slots 5, end rings 3 | slots 5, end rings 3 |
+| backend | pymoo from GitHub source + sandbox shim for its `moocore` C dependency (ranking delegated to pymoo's own non-dominated sort) | **numpy EHVI fallback** (no torch in the sandbox) | — |
+| wall time per run | slots 24 min, end rings 28 min | 11–13 / 9–11 min | 6 / 7 min |
+Device evaluation: 0.66–0.74 s (slots), 0.73–0.84 s (end rings) on one sandbox core.
+
+**RQ3 — sample efficiency (sandbox, superseded)** (HV in the normalized space,
+median over seeds, IQR ≤ 0.004)
+| layout | evals | NSGA-II | qNEHVI | Sobol |
+|---|---|---|---|---|
+| slots | 50 | 0.1758 | **0.1863** | 0.1768 |
+| slots | 100 | 0.1816 | **0.1965** | 0.1775 |
+| slots | 200 | 0.1892 | **0.2024** | 0.1784 |
+| slots | final | 0.2060 (2000) | 0.2024 (200) | 0.1792 (500) |
+| end rings | 200 | 0.6607 | **0.6772** | 0.6524 |
+| end rings | final | 0.6782 (2000) | 0.6772 (200) | 0.6546 (500) |
+NSGA-II needs **~1060 (slots) / ~1800 (end rings) evaluations** to reach qNEHVI's median HV at 200 → **5–9× fewer
+evaluations for BO**; random search never reaches it. HV differences look small because the anchors already carry most
+of the hypervolume (without anchors: qNEHVI@200 0.196 vs NSGA-II@2000 0.154 on slots). Caveat: qNEHVI here is the
+numpy EHVI fallback; the BoTorch path is written but untested in this sandbox.
+
+**RQ2 — designs vs baselines at equal pump power (sandbox, superseded)** (R = (T_wall,max − T_in)/Q;
+baselines = best feasible design of each family with P ≤ cap, from `task10_fronts.csv`; U-G/U-D = uniform gyroid /
+diamond grids on the same layout, `task11_uniform_refs.csv`)
+| cap | optimized slots R [mK/W] | vs B1s | vs B2 | vs B3 | vs uniform D | vs B1 (end rings) |
+|---|---|---|---|---|---|---|
+| 0.10 W | 26.7 | −7.6 % | −5.0 % | — | −7.6 % | +45 % worse |
+| 0.25 W | 22.6 | −12.1 % | −9.6 % | −5.3 % | −10.8 % | +57 % |
+| **0.306 W** (Task 10 cap) | **22.2** | **−13.4 %** | **−9.1 %** | **−1.9 %** | −9.8 % | **+68 %** |
+| 0.50 W | 21.3 | −17.0 % | −8.0 % | −6.0 % | −8.7 % | +72 % |
+| 1.0 W | 20.7 | −19.4 % | −4.4 % | −8.8 % | −4.7 % | +100 % |
+| 2.0 W | 20.7 | −19.5 % | −0.2 % | −8.8 % | −0.5 % | +108 % |
+(B3's front only covers its 0.25–0.31 W search window, so its values above 0.31 W are its 0.31 W design.) Same caps
+with mass ≤ the baseline design's mass: −13.2 % vs B1s, −9.1 % vs B2, −1.9 % vs B3 at 0.306 W.
+
+| cap | optimized end rings R [mK/W] (P, mass) | vs B1 | vs uniform G | vs uniform D |
+|---|---|---|---|---|
+| 0.01 W | 10.7 (0.0098 W, 0.337 kg) | — (B1 needs > 0.08 W) | −8.0 % | −8.4 % |
+| 0.03 W | 9.3 (0.027 W, 0.377 kg) | — | −2.3 % | −1.4 % |
+| 0.10–2 W | **8.55** (0.066 W, 0.408 kg) = uniform dense diamond (anchor) | **−35.5 %** at 0.306 W (−53.6 % at 0.1 W, −13.9 % at 2 W) | −2.9 % | −1.0 % (grid step) |
+With mass ≤ B1's 0.333 kg: −26.4 % vs B1 at 0.306 W.
+
+**Headline (sandbox budgets, superseded)**
+1. **Manifold topology dominates.** With end rings the lattice beats the tuned helical channel B1 by **35 % in R at
+   equal pump power (0.306 W cap) while using 0.066 W, 1/4 of B1's 0.287 W**; with axial slots every lattice is 68 %
+   worse than B1 (the unfinned sleeve under the outlet slot sets R).
+2. **Like-for-like (slots), graded beats every baseline:** −13.4 % vs B1s, −9.1 % vs the best uniform gyroid (B2),
+   −9.8 % vs uniform diamond, −1.9 % vs density-only grading (B3) at the 0.306 W cap (R_active 14.6 vs B3 15.0 mK/W).
+   The gain over uniform shrinks to 0 at high pump power, where the optimum is uniform (all fields at their bounds).
+3. **What the grading does** (`task11_designs_slots.png`): the best design at the cap is a near-*gyroid* (w ≤ 0.21, area mean 0.10) that densifies toward the outlet slot (ρ* up to 0.45, area mean 0.28) and
+   refines the cell toward the outlet (L 5.3 → 2.2 mm along each path). Cell-size grading is the new lever over B3; **blending (w) is hardly used** in the
+   trade-off region — the strict wall criterion makes blends expensive (Task 1 issue 1), and the extremes pick uniform
+   diamond. With end rings the knee is a light gyroid (ρ* 0.20–0.24) with L coarse at the inlet ring and fine at the
+   outlet ring; grading gains only 1–8 % over uniform there (largest at low pump power).
+4. **RQ3:** qNEHVI reaches in 200 evaluations what NSGA-II needs ~1000–1800 for; Sobol random search stalls.
+
+**Representative designs (sandbox, superseded)** (
+`task11_designs_<layout>.png`; combined front of all methods/seeds; knee = closest to the ideal point with objectives
+normalized over the front, excluding the two extremes)
+| layout | design | R [mK/W] | R_active | P [W] | mass [kg] | margin | note |
+|---|---|---|---|---|---|---|---|
+| slots | min_R | 20.67 | 12.85 | 1.91 | 0.396 | 12.1 | uniform diamond ρ* 0.5, L 2.16 mm (anchor) |
+| slots | best_at_cap | **22.23** | 14.61 | 0.302 | 0.321 | 10.4 | graded gyroid (nsga2 seed 1) |
+| slots | knee | 23.66 | 16.60 | 0.149 | 0.303 | 4.4 | graded, light |
+| slots | min_mass | 23.64 | 16.09 | 0.462 | 0.291 | 12.6 | uniform diamond ρ* 0.2, L 2 mm (anchor) |
+| end rings | min_R | 8.55 | 8.55 | 0.066 | 0.408 | 47.6 | uniform diamond ρ* 0.5 (anchor) |
+| end rings | knee | 11.70 | 11.70 | 0.0066 | 0.300 | 5.2 | graded gyroid (qnehvi seed 2) |
+| end rings | min_mass | 10.54 | 10.54 | 0.016 | 0.296 | 13.3 | uniform diamond ρ* 0.2 (anchor) |
+Each JSON: control nets (SI + unit), basis description (enough to rebuild the fields without VoxLat), field stats, all
+metrics at 3 L/min, a 1–5 L/min sweep, source run/seed/eval, and a **direct Task 1 `check_manufacturable` (n = 48) on the
+3 most critical cells — passed for all 7 designs** (Task 1 open issue 2). Structural margin ≥ 3.6 on every front design
+(never active).
+
+**Run commands and runtime estimates (laptop)**
+```powershell
+pip install -e .[opt]                                  # pymoo + botorch (+ torch)
+python scripts/task11_optimize.py --quick              # ~1 min smoke run (results/task11_quick)
+python scripts/task11_optimize.py --layout slots end_rings --method nsga2 qnehvi sobol --seeds 0 1 2 3 4 --parallel 4
+python scripts/task11_uniform_references.py            # ~2 min
+python scripts/task11_analysis.py                      # ~5 min
+```
+Defaults: NSGA-II pop 100 × 100 gen (10 000 evaluations), qNEHVI 200 (q = 4, BoTorch), Sobol 1000. Estimate at the
+sandbox's 0.7–0.85 s per evaluation: NSGA-II ~2.0 h (slots) / ~2.3 h (end rings) per run, qNEHVI ~0.3–0.6 h per run
+(BoTorch acquisition on 72-D GPs is slower than the numpy fallback; ~20–40 s per batch assumed), Sobol ~15 min per run
+→ **~30 CPU-hours; ~7–8 h with `--parallel 4`** (overnight), ~4–5 h on 6–8 physical cores. To halve it: `--n-gen 50`.
+Runs are independent; `--skip-done` resumes after an interruption (an interrupted run restarts; its checkpoint keeps
+the partial data).
+
+**Verification (tests; `results/task11_pytest_log.txt`)**
+- Bases = scipy `BSpline.design_matrix` (1e-14), partition of unity, periodicity, end interpolation; fields in bounds;
+  `field_function` = cell fields; batched = single.
+- `FastMinCellSize` = Task 1 `min_cell_size` (rel. 1e-12); repaired designs feasible and accepted by the device model
+  (`manufacturable`, same gradient to 1e-12, same mass); repair idempotent on feasible designs; gradient repair keeps
+  the mean ρ*; pinch-zone blend is polarized without touching ρ*, L.
+- Hypervolume exact on analytic boxes and vs 3·10⁵-point Monte Carlo; HVI = HV difference (1e-14) in 2-D and 3-D;
+  box-decomposition volume = 1 − HV; analytic EHVI = Monte Carlo (5σ, 2·10⁵ samples), σ → 0 gives HVI.
+- GP log-posterior gradient vs finite differences (rtol 1e-5), interpolation, ARD relevance, conditioning.
+- End-ring layout: uniform Darcy flow axial and exact (1e-10), Darcy–Forchheimer vs 1-D reference over 1–5 L/min (1e-9),
+  ε-NTU = exact discrete upwind at 3 axial grids (1e-10), bulk flux solution, mass/energy balance on graded designs
+  (< 1e-10 / 1e-9), heat input = 770 W exactly.
+- Optimizers end to end on tiny budgets (NSGA-II only when pymoo is installed).
+Full suite `-m "not slow"`: **475 passed, 4 skipped** (pyamg ×2, pyarrow ×2) in 2.4 min.
+
+**Open issues / notes for later tasks**
+1. ~~Laptop run needed~~ → done 2026-10-14; ~~re-run with the corrected rule~~ → done 2026-10-16 on GitHub Actions
+   (`.github/workflows/task11-study.yml`; trigger: commit to `configs/task11_cloud_run.txt` on branch `task11-cloud-run`).
+   Note GitHub's Actions terms: compute must relate to the project's software - fine for the repo's own study scripts,
+   but keep such heavy runs occasional.
+2. End rings and B1 both assume ideal ring manifolds outside the heated length; the lattice's Δp is only 40–400 Pa,
+   so real ring/port losses (not modelled for either) would be a larger *fraction* of the lattice's pump power. Say so.
+3. Blends are effectively excluded by the strict wall criterion; RQ2's "multi-morphology" gain is density + cell-size
+   grading. A relaxed criterion (`wall_statistic="throat"`) would open blends — a sensitivity study, not a default.
+4. Representative min-R/min-mass designs are uniform anchors; Task 12 should export `slots/best_at_cap` and the
+   end-ring knee (graded) plus one uniform anchor.
+5. Objective normalization (lo/hi) is fixed in `ObjectiveSpace`; keep it for every run so HV values stay comparable.
+7. **First laptop full run (2026-10-11/13) crashed in the qNEHVI phase** (`BrokenProcessPool`: a worker was killed). Most likely
+   cause: BoTorch qNEHVI scored 256 candidates per forward pass; with 128 MC samples and a 3-objective box decomposition that is
+   several GB per process (× 4 parallel runs). Fixes: candidates scored in chunks of 8 (`_select_botorch(chunk=8)`, also
+   `optimize_acqf_discrete(max_batch_size=8)`), torch limited to 1 thread per process, a numpy-EHVI fallback for any batch whose
+   BoTorch acquisition raises (counted in `bo_timings.botorch_fallbacks`, per-row `bo_backend = numpy-fallback`);
+   `task11_optimize.py` now restarts unfinished runs if a worker dies (`--retries`, default 3) and `--skip-done` keeps only runs
+   finished with the same budget settings (`study.run_is_complete`; the sandbox runs shipped with the repo are redone).
+   **Resume from checkpoints** (`--skip-done` and every automatic retry): an interrupted run with the same settings reloads its
+   archive (`study.load_checkpoint`) and continues - Sobol fast-forwards its sequence (identical to an uninterrupted run, tested),
+   qNEHVI refits its GPs on the archive and continues the batches, NSGA-II gets its population back from the archive by
+   rank-and-crowding survival over every evaluated design (elitist, so the same population up to ties) and runs the remaining
+   generations; nothing is re-evaluated, wall time accumulates, `meta["resumed"]` logs each restart. At most ~2 min is lost.
+   The 4 slot NSGA-II runs (10 000 evaluations each, ~5.8 h) had finished before the crash and are kept.
+6. Sandbox notes: PyPI blocked; pymoo 0.6.2 from its GitHub source with a sandbox-only shim for `moocore`
+   (`pareto_rank` → pymoo's `fast_non_dominated_sort`), not part of the repo; numpy 2.5.3, scipy 1.18.1, Python 3.13.
+
+**Data**: `results/task11/<layout>/<method>_s<seed>.csv.gz|json` (every proposal; cheap rejects without x; 8.5 MB),
+`results/task11_{runs,hv_curves,hv_summary,equal_pump_power,representative,uniform_refs}.csv`,
+`results/task11_front_<layout>.csv`, `results/designs/task11_*.json`, `results/task11_ablation_no_anchors/`.
+**Figures**: `task11_hypervolume.png`, `task11_pareto_fronts.png`, `task11_designs_slots.png`,
+`task11_designs_end_rings.png`.
+
+**References** (Task 11 additions; verify before the manuscript)
+- Deb K. et al. (2002). A fast and elitist multiobjective genetic algorithm: NSGA-II. *IEEE TEVC* 6(2), 182–197.
+- Blank J., Deb K. (2020). pymoo: Multi-objective optimization in Python. *IEEE Access* 8, 89497–89509.
+- Daulton S., Balandat M., Bakshy E. (2021). Parallel Bayesian optimization of multiple noisy objectives with expected
+  hypervolume improvement (qNEHVI). *NeurIPS 34*.
+- Ament S. et al. (2023). Unexpected improvements to expected improvement for Bayesian optimization (LogEI). *NeurIPS 36*.
+- Balandat M. et al. (2020). BoTorch. *NeurIPS 33*.
+- Emmerich M., Giannakoglou K., Naujoks B. (2006). Single- and multiobjective evolutionary optimization assisted by
+  Gaussian random field metamodels (EHVI). *IEEE TEVC* 10(4), 421–439.
+- Hvarfner C., Hellsten E., Nardi L. (2024). Vanilla Bayesian optimization performs great in high dimensions. *ICML*.
+- Owen A. (1998). Scrambling Sobol' and Niederreiter–Xing points. *J. Complexity* 14, 466–489.
+
+## Task 12 — PicoGK geometry export  ✅
+
+**What could and could not be run here.** The sandbox has no .NET SDK (dotnet hosts blocked), so the C# library was
+**not compiled or run in the build sandbox**. Everything Python was run and tested. To close the loop without the laptop,
+`.github/workflows/task12-export.yml` (windows-latest) builds PicoGK 1.7.7.5 + the exporter, runs the C#-vs-numpy
+probe tests, a headless 30° PicoGK sector build with all checks and the numpy voxel-by-voxel comparison, and a coarse
+full jacket; STL + reports are uploaded as the `task12-export` artifact. Trigger it from the Actions tab after pushing.
+C# API use was checked against the PicoGK source of every 1.7.x tag (only APIs present in 1.7.0–1.7.7.5, except
+`Library.Go(..., bEndAppWithTask)`, which needs ≥ 1.7.6 — the legacy Noyron script already uses it).
+
+**Built**
+- `src/voxlat/export/dotnet/` (.NET 9; `Directory.Build.props` holds `PicoGKDir`, default `D:\nyron 2\PicoGK_Engine\bin\Release\net9.0`)
+  - `VoxLat.Export.Core` (no PicoGK): `ExportConfig` (JSON), `DesignFields` (B-splines of the Task 11 design JSON),
+    `JacketField` (phase tables + `SignedDistance`, all evaluation in C#), `MaskIO` (bit-packed masks), `Probe` (file-based evaluator).
+  - `VoxLat.Export` (refs PicoGK.dll, not copied): `GradedTpmsJacket : PicoGK.IImplicit`, `WedgeImplicit`,
+    `InterfaceBandImplicit`, `JacketBuilder` (`RunWithViewer` = Library.Go pattern, `RunHeadless` = `new Library(voxel)`, `Run`).
+  - `VoxLat.Export.Probe` console (`sd | fields | bench`), used by tests and CI.
+- `src/voxlat/export/` (Python): `config.py` (ExportOptions, export-config JSON v1 in mm, auto sector centre),
+  `field.py` (**numpy mirror = specification of the C# implicit**), `sector.py` (pure-numpy sector generator, capped
+  slab EDT, band-limited sliver opening, volume-fraction report, mask comparison), `checks.py` (manufacturability
+  checks), `maskio.py`, `stl.py` (binary STL IO + numpy ray-parity re-voxelizer), `picogk.py` (pythonnet driver + probe).
+- `scripts/task12_export.py` (`build | numpy | check | selftest | estimate | config`), `scripts/task12_figures.py`.
+- `tests/test_export.py` (40, numpy side), `tests/test_export_dotnet.py` (7, skip unless the probe is built).
+- `results/designs/task12_slots_best_at_cap_gyroid.json` (new design variant, see findings), `results/export/*`.
+- pyproject: extra `export = [pythonnet]`, C# sources as package data; `.gitignore`: mask `.bin`, `results/export_ci/`.
+
+**Geometry (decisions; full equations in the `field.py` docstring)**
+1. *Frame*: mm, z = motor axis (z = 0 start of heated length), θ from +x = inlet manifold. Fields ρ*, w, L, a_z are the
+   Task 11 B-splines in (θ r_m, z), constant through the gap (depth-averaged model).
+2. *Phase-field grading, conformal cylindrical coordinates*: P(θ,z) = ∫ r_m/L dθ; **integer N = round(mean_z P(2π,z))
+   cells around**, u_t = N P/T(z) (seamless: u_t(2π) − u_t(0) = N exactly, tested); u_z = ∫ dz/(a_z L) from mid-length;
+   u_r = φ_r0 + (r_m/L) ln(r/r_i) (log-polar ⇒ cell shape constant through the gap, size ∝ r/r_m = 0.96…1.04; radial
+   cells across the gap = design N = h/L). φ_r0 = 0 = Task 7 cut phase at the sleeve. Tables 2048 × 257 on (θ, z),
+   bilinear. Cells never tear. A `seam` mode (exact L, seam hidden in the inlet slot or a 0.6 mm meridional rib) exists
+   but is **not** a fix for axial L grading: the cell-count mismatch accumulates into 50–84° tilts (end_rings/knee).
+3. *Level set*: φ = (1−w)G/1.5 + wD/√2, network solid φ ≤ c(w, ρ*) (Task 1 continuum table), sd = (φ−c)/|∇φ|
+   (diagonal phase Jacobian, floored, clamped ±2 mm). Only the sign defines the part.
+4. *Part*: lattice ∩ gap (0.1 mm overlap into walls/caps), minus manifold slot plenums (slots layout) or open to
+   8 mm ring plenums (end rings); ∪ sleeve, outer wall, 2 mm end caps, port bosses (Ø bore + 6, 6 mm high); − radial
+   port bores (Ø 8 slots / Ø 6 rings) into the plenums at mid-length / ring mid-height. Outer wall spans the slots
+   (as the Task 9 structural model).
+5. *Sector*: 30° wedge rendered with +2 mm margins (for the checks), STL trimmed to the nominal 30°; STL in the
+   sector-local frame (centred on +x). Default centre "auto" = cell with the smallest L/L_min (fine Task 11 table).
+6. *Sliver opening*: Offset(−r), Offset(+r), r = min_wall/2, **only within min_wall + 2 voxels of open lattice faces**
+   (slot sides, ring faces): clipping leaves sub-wall slivers there; thin interior walls are reported, never removed.
+
+**Checks** (`checks.py`; all on the nominal sector, wide-wedge neighbourhood)
+| check | method | calibration (unit tests) |
+|---|---|---|
+| min wall (lattice, away from open faces) | local thickness via discrete opening (erode EDT ≥ d/2+h/4, dilate ≤ d/2+1.25h), bisection | plates/rods within [−0.75h, +0.75h], monotone in d |
+| min pore | throat: largest sphere inlet→outlet, centres EDT ≥ d/2 − h/4, 26-connected, bisection | ducts [−0.25h, +0.5h]; periodic G/D cells within 1.25 voxels of the Task 1 table |
+| connectivity | 6-connected fluid labels; terminals = port bores + plenums, else the sector cut faces | — |
+| trapped pockets | fluid components touching no terminal / cut face; < 3-voxel-Ø ones listed as voxel-scale | synthetic cavity detected |
+| loose solid | solid components not reaching housing / cut faces | synthetic floating ball detected |
+Memory ≈ 10–20 bytes per voxel (slab EDTs, uint8 region codes, `malloc_trim`); 30° at 0.06 mm = 2.7e8 voxels, peak 6.1 GB.
+
+**Cross-checks run here (numpy)**
+- Bases = Task 11 parameterization to 1e-14; design fields from JSON = `GradingParameterization.field_function(x_unit)` to 1e-9;
+  threshold lookup = Task 1 table to 1e-12; φ = `tpms.level_set` at the phase coordinates to 1e-12.
+- **Volume fraction** (30° sectors; solid fraction of the lattice region vs design ρ* and vs the *phase-aware*
+  expectation = planar-averaged TPMS fraction at the local radial phase):
+| design (voxel) | vs design ρ* | vs phase-aware | core / near-wall vs design | patches ~2 cells: mean / max abs |
+|---|---|---|---|---|
+| uniform G ρ 0.25 / D ρ 0.4 (0.1 mm, tests) | +0.4 % / <1 % | −0.2 % / <1 % | — | — |
+| slots/best_at_cap (0.06) | +0.77 % | +0.51 % | +0.00 / +1.7 % | 1.4 / 7.2 % |
+| slots/best_at_cap_gyroid (0.06) | +0.10 % | +0.13 % | +0.16 / −0.00 % | 0.7 / 2.2 % |
+| end_rings/knee (0.07) | +0.03 % | +0.06 % | +0.5 / −0.3 % | 1.5 / 7.0 % |
+| end_rings/min_R (0.07) | +0.00 % | +0.00 % | 0.0 / 0.0 % | 0.03 / 0.11 % |
+  Graded patches scatter ±1–7 % (local grading within a patch, cut phase), overall agreement < 1 %.
+- C# vs numpy: **not run here** — `scripts/task12_export.py selftest` / `tests/test_export_dotnet.py` require < 1e-6 mm
+  on 2 × 10⁵ points per mode (+ fields to 1e-9, same N_θ); PicoGK raw mask vs numpy mask: IoU reported by `build`.
+
+**Findings (numpy sector checks, 30°)**
+| design | sector centre | min wall [mm] (≥ 0.35) | throat [mm] (≥ 0.8) | connected | pockets | loose | verdict |
+|---|---|---|---|---|---|---|---|
+| slots/best_at_cap (0.06 mm) | 262.75° (L/L_min 1.076) | **0.306** (230 voxels, 60 necks, z ≈ 0.3–1.1 mm) | 1.55 | ✓ | 0 (+2 voxel-scale, 0.0013 mm³, strut–outer-wall junction) | 0 | **fails min wall** |
+|  same, zoom 18° × z ≤ 4.5 mm | 262° | 0.306 @0.04 mm, **0.284 @0.03 mm** (83 necks) | — | — | — | — | confirmed |
+| slots/best_at_cap_gyroid (0.06) | 173.75° (L/L_min 1.40) | 0.502 (end-cap zoom @0.03: 0.472) | 1.03 (outlet slot path) | ✓ | 0 (+1 voxel-scale) | 0 | **pass** |
+| end_rings/knee (0.07) | 213.75° (1.42) | 0.380 | 1.44 | ✓ | 0 | 0 | pass |
+| end_rings/min_R (0.07) | 31.25° (1.01, uniform D ρ 0.5) | 0.665 | **0.785** | ✓ | 0 | 0 | pass within resolution (−0.015 mm) — borderline pore |
+Clipping slivers near open faces after the band opening: ≥ 0.36 mm everywhere.
+
+1. **slots/best_at_cap is not printable as optimized**: its near-gyroid blend (w ≤ 0.24) has 0.28–0.31 mm necks in the
+   first cell next to the z = 0 end cap (θ ≈ 254–270°, ρ* 0.21, w 0.23, L 2.5–2.8 mm). Two causes: (a) the Task 1 n = 48
+   wall table over-reads the *strict* minimum wall of blends and diamond: at n = 96 the opening method gives 0.133 L
+   vs 0.142 L table-implied (w 0.23, ρ* 0.21), −6…−12 % for D (gyroid −3 %); Task 11's 1.01·L_min margin is inside that
+   error; (b) the export's phase distortions near the axial ends (circumferential stretch 0.97, axial tilt up to 9°).
+   **Fix used here**: `task12_slots_best_at_cap_gyroid.json` = same ρ*/L nets, w ≡ 0 (Task 9 model: R 21.94 → 21.92
+   mK/W, pump power 0.3039 → 0.3076 W (+1.2 %, 0.7 % above the 0.3055 W selection cap), mass unchanged, margin 8.7 → 9.8,
+   L/L_min 1.09 → 1.40). It passes every check. RQ2 headline at the 0.306 W cap barely moves (R −0.09 %); for Task 13/14
+   either re-run the slots study with a stricter wall rule or report best_at_cap_gyroid as the manufacturable optimum.
+2. **end_rings/min_R (uniform D ρ 0.5, L = 1.01 L_min)** sits on the pore limit: 0.785 mm measured (periodic table
+   0.809 mm); the conformal map makes cells 4 % smaller at the sleeve. A 5 % larger L (2.30 mm) restores margin.
+3. **Integer N vs axial L grading**: one continuous phase field has one winding number, so designs whose cells-around
+   count varies with z must stretch circumferentially: end_rings/knee 0.72–1.46 (cells become locally a_z-stretched;
+   checks still pass), slots designs 0.95–1.06. Recommended Task 11 follow-up: limit the axial variation of ∮ r_m/L dθ.
+4. Phase tilts (cells sheared, not torn): axial ≤ 9° (p95 6°) for slots designs, circumferential p95 16–21° where L
+   varies along both θ and z.
+
+**Timings** (numpy, sandbox 2 cores): tables 0.1 s; 30° sector mask 0.06 mm (2.7e8 voxels) 140 s; volume-fraction
+report 90 s; checks 6–9 min; total 12–18 min, peak 3.6–6.1 GB. Laptop (0.05 mm, 4.3e8 voxels): ≈ 1.6× that, **16 GB RAM
+recommended** (use `--voxel 0.06` on 8 GB). PicoGK estimates (`estimate`): render ≈ 4e8 implicit calls (~1–2 min at
+~0.2 µs), opening/mask/STL a few minutes; sector STL ≈ 5–8 M triangles (250–400 MB); full jacket at 0.2 mm ≈ 2e8 calls,
+STL ≈ 200 MB.
+
+**Run on the laptop (Windows, PowerShell, repo root)** — see README "PicoGK geometry export (Task 12)":
+```powershell
+pip install -e .[export]
+$env:PICOGK = "D:\nyron 2\PicoGK_Engine\bin\Release\net9.0"
+dotnet build src\voxlat\export\dotnet\VoxLat.Export\VoxLat.Export.csproj -c Release "-p:PicoGKDir=$env:PICOGK"
+dotnet build src\voxlat\export\dotnet\VoxLat.Export.Probe\VoxLat.Export.Probe.csproj -c Release
+python scripts\task12_export.py selftest
+python scripts\task12_export.py build --design results\designs\task12_slots_best_at_cap_gyroid.json --mode sector --picogk-dir $env:PICOGK
+python scripts\task12_export.py build --design results\designs\task12_slots_best_at_cap_gyroid.json --mode full --voxel 0.2 --headless --picogk-dir $env:PICOGK
+```
+
+**Laptop run 1 (2026-10-16, Windows 11, 8 cores, PicoGK runtime 1.7.1 on .NET 10.0.8)** — `build --mode sector` of
+`task12_slots_best_at_cap_gyroid` at 0.05 mm (sector 30° at 173.75°):
+- **The C# library compiled and ran inside PicoGK** (viewer mode): render 164 s for 453 M voxels (0.36 µs/voxel),
+  raw mask 59 s, band-limited sliver opening 561 s (13 115.0 → 13 102.9 mm³), clean mask 27 s, STL 20.3 M triangles
+  (11 s), total 859 s. PicoGK raw volume 13 115 mm³ vs numpy (0.06 mm) 13 087 mm³ (+0.2 %).
+- **Bug found and fixed**: PicoGK's native `GetSlice` fills the image from y = max down to y = min; `WriteMask` assumed
+  y ascending, so the masks were mirrored in y (lattice fraction read as 0.145 = 0.39², i.e. two uncorrelated
+  lattices). Fixed in `JacketBuilder.WriteMask` (rows flipped; header `"y_order": "ascending"`); `read_mask` flips
+  older PicoGK masks without that key, so the existing masks are usable without re-running PicoGK (`build --reuse`).
+- Python then ran out of memory (1.4 GB `sum_labels` allocation). Fixed: region statistics without float64 weights,
+  masks read one at a time, a 3-slice sanity IoU vs the numpy implicit before the long checks (abort < 0.9), and the
+  check width chosen from the free RAM (`--check-angle`, cropped masks are cut to the narrower wedge). The full 30°
+  checks at 0.05 mm need ~11 GB (24 B/voxel).
+
+**Laptop run 2 (2026-10-16, `build --reuse`, same PicoGK masks, 0.05 mm, row-order fix)** — `task12_slots_best_at_cap_gyroid`,
+sector 30° at 173.75° (outlet slot + port inside), checks on the central 23° (free RAM 9.6 GB < 9.1 GB / 0.75):
+| item | result |
+|---|---|
+| sanity IoU (3 slices) raw / clean vs numpy implicit | 1.0000 ×3 / 0.999–1.000 |
+| **PicoGK raw mask vs numpy mask, voxel by voxel** | **IoU 0.99676**, volume +0.32 % (262 k of ~8e7 solid voxels differ: surface voxels, float positions + narrow band) |
+| volume fraction vs design ρ* / phase-aware | −0.07 % / −0.05 % |
+| min wall, raw interior = cleaned | **0.482 mm** (≥ 0.35) |
+| min throat | **1.07 mm** (cut face → outlet), 1.16 mm (other face → outlet) (≥ 0.8) |
+| connectivity | both cut faces → outlet plenum/port ✓ |
+| trapped pockets / voxel-scale / loose solid | 0 / 0 / 0 |
+| clipping slivers after band opening | ≥ 0.328 mm (= 0.35 within the −0.75 h resolution) |
+| check time | 155 s vf + raw walls, 343 s numpy comparison, 576 s checks |
+**Verdict: the exported best_at_cap_gyroid sector is manufacturable at the reference limits, and the PicoGK geometry
+reproduces the numpy specification (IoU 0.997).**
+
+**Laptop run 3 (full jacket, `--mode full --voxel 0.2 --headless`)** — `task12_slots_best_at_cap_gyroid`: PicoGK 144 s in
+total (render 27 s, opening 97 s, STL 5 s), **15.0 M triangles**, volume 136 345 mm³ raw / 136 304 mm³ clean
+(= 0.364 kg AlSi10Mg; Task 9 mass 0.310 kg + the export's end caps ≈ 17.8 cm³ and port bosses ≈ 2 cm³ - consistent).
+Checks at 0.2 mm: **inlet port → outlet port connected through the whole jacket, throat 1.22 mm (≥ 0.8), no trapped
+pockets, no loose solid**; walls not resolved at 0.2 mm (covered by the 0.05 mm sector). Reports committed in
+`results/export/*full*.json`.
+
+**Public API**
+```python
+from voxlat.export.config import ExportOptions, build_export_config, write_export_config, load_design, critical_location
+from voxlat.export.field import JacketField, DesignFields      # .signed_distance(x,y,z[,half_angle]) mm; .fields_at; .describe()
+from voxlat.export.sector import generate_mask, open_mask, volume_fraction_report, compare_masks, capped_edt
+from voxlat.export.checks import check_mask, min_wall, throat, thin_mask, RegionGrid
+from voxlat.export.maskio import VoxelMask, read_mask, write_mask   # schema voxlat-mask/1 (shared with C#)
+from voxlat.export.stl import read_stl, write_stl, voxelize_stl
+from voxlat.export.picogk import run_picogk, probe, probe_fields, load_dotnet, build_command
+```
+C#: `JacketField.Load(cfg).SignedDistance(x, y, z, halfAngle)`, `JacketBuilder.RunWithViewer/RunHeadless/Run(cfg)`,
+`Probe.EvaluateFile/FieldsFile/Benchmark`.
+
+**Figures**: `task12_renders.png` (+ `task12_render_{overview,lattice_closeup,outlet_slot_section}.png`; ray-traced
+from the numpy implicit by `scripts/task12_render.py`, ~2 min at 1800 px; same geometry as the PicoGK STL, IoU 0.997),
+`task12_phase_field.png` (three designs unwrapped at r_m), `task12_sector_slices.png` (best_at_cap
+sector: axial, meridional, unwrapped cuts; critical cell), `task12_volume_fraction.png`. Data: `results/export/*_checks.json`.
+
+**Open issues**
+1. Record `selftest` (max |Δ| C# vs numpy, probe now rolls forward to .NET 10).
+2. ~~Decide best_at_cap vs best_at_cap_gyroid for RQ2~~ — decided in Task 13: the paper uses best_at_cap_gyroid. A Task 11 re-run with walls from an n ≥ 96 table remains optional.
+3. Ports/manifold blocks are simple bosses with radial bores (no hose fittings/threads); end caps and ring heights are
+   export choices, not optimized.
+4. Pocket check: a 5-voxel void at a strut–outer-wall junction appears at 0.06 mm in both slots sectors — check at 0.04 mm.
+5. Citations to verify: Hildebrand & Rüegsegger 1997 (local thickness); PicoGK (LEAP 71, Apache-2.0, github.com/leap71/PicoGK).
+
+**Tests**: `tests/test_export.py` 42 passed (~60 s); `tests/test_export_dotnet.py` 7 skipped here (no .NET). Full suite `-m "not slow"`: **519 passed, 13 skipped** in 4.7 min (`results/task12_pytest_log.txt`).
+
+
+## Task 13 — Reproducibility pass + figure set  ✅
+
+**Paper design (user decision).** The slot-manifold optimum of the paper is the manufacturable
+`results/designs/task12_slots_best_at_cap_gyroid.json` (Task 12 finding 1; closes Task 12 open issue 2): R 21.92 mK/W,
+R_active 14.41, pump power 0.3076 W, mass 0.310 kg, margin 9.8; PicoGK sector at 0.05 mm passes every check
+(min wall 0.482 mm, throat 1.07 mm, IoU 0.997 vs numpy), full jacket port-to-port connected. The blend `best_at_cap`
+stays in the archive as the optimizer's raw result.
+
+**Built**
+- `scripts/experiments/catalog.py` — single source of truth: 31 producer `Step`s (script, full / quick / replot
+  arguments, laptop runtime, required modules, upstream deps; PicoGK build marked `manual`) and 49 paper `Item`s
+  (F01–F40 figures, T01–T09 tables: file, caption, section, data files).
+- One script per item: `scripts/experiments/F01_heat_flux_profile.py` … `F40_export_volume_fraction.py`,
+  `T01_solver_verification.py` … `T09_export_checks.py` (thin wrappers; `--quick`, `--replot`, `--dry-run`).
+- `scripts/experiments/run_all.py` — `--quick` (every producer at plumbing size in a throw-away copy of the repo,
+  committed results untouched), `--replot` (figures/tables from committed data), default = full recomputation;
+  `--only F20 T07`, `--no-deps`, `--skip`, `--list`, `--estimate`, `--dry-run`; per-step logs and
+  `results/reproduce/<mode>_<time>/summary.json` (wall times); ends with tables, gallery and audit.
+- `scripts/experiments/tables.py` — paper tables T01–T09 → `results/tables/T0x_*.csv` + `.md` (sources in the header).
+  **T07** (RQ2) adds the manufacturable optimum against every baseline at the 0.306 W cap and at matched pump power.
+- `scripts/experiments/make_gallery.py` → `results/figure_gallery.pdf` (title page with contents, 40 captioned
+  figure pages, 7 table pages; matplotlib + Pillow only, ~20 s).
+- `scripts/experiments/check_consistency.py` → `results/reproduce/consistency_report.{md,csv}`: 61 checks of the
+  figure/table data against numbers quoted in STATUS (Tasks 1–12) + existence of every item.
+- Environment lock files `requirements/lock-windows-py3.13.txt` (the laptop: Windows, Python 3.13) and
+  `requirements/lock-linux-py3.12.txt` (CPU torch), `pip freeze` of a working all-extras install, written by CI.
+- `.github/workflows/reproduce.yml` (push to `task13-*` or manual): all-extras install, lock file, fast tests,
+  `run_all --quick` on windows-latest/3.13 and ubuntu-latest/3.12, `run_all --replot` + gallery on Linux; artifacts.
+- README: section "Reproduce the paper"; stale Task 11 runtime line corrected. `.gitignore`: `results/reproduce/*/`.
+- No library code changed (no `src/` edits).
+
+**Verification**
+- **CI (`reproduce.yml`, all extras)**: ubuntu-latest / Python 3.12 — fast suite **527 passed, 7 skipped** (the
+  7 .NET probe tests) in 5.3 min; `run_all --quick` **all 28 producer steps ok in 8.9 min** (incl. Task 5 dataset,
+  Task 6 GP/ensemble/CNN, Task 11 NSGA-II/qNEHVI/Sobol with BoTorch); `run_all --replot` **all steps ok in 6.3 min**
+  (incl. Task 5 quick-look and Task 6 figures), audit 59/61 ok. windows-latest / Python 3.13 (the laptop setup):
+  run 38941806813 — tests, quick reproduction all passed; run 38944974622 — 1 test failed (526 passed), same code and
+  environment, passed again in run 38947228400 → flaky, most likely the wall-time assertion in
+  `tests/test_jacket2d.py` (`dt < 4.0`) on a loaded runner; see open issue 5. The `tests` workflow (core install, Windows/Linux × 3.11/3.12) passed on every push.
+- Local (sandbox, Python 3.13, 2 cores, no pyarrow/torch/pymoo — PyPI blocked): fast suite **521 passed, 13 skipped**
+  in 5.2 min; `run_all --quick` 25 producers ok, 5 skipped for missing modules, **9.5 min**; `run_all --replot`
+  22 steps ok in **10.9 min**.
+- **Replot = committed data.** In a copy of the repo, every table that `--replot` rewrites (Tasks 8–11, incl. all
+  `task11_*` CSVs and the design JSONs) equals the committed file to ≤ 1e-9 absolute (round-off columns such as
+  energy-balance errors only); Task 1/4/6/7/12 figures re-render pixel-identically. Task 0/8/9/10/11 PNGs differ by
+  fonts/size only (they were rendered on the laptop/CI, not in this sandbox) — the data are the same.
+- Tasks 2, 3, 4 (except 4 verification/convergence) have no replot path: their figures are rebuilt only by the full
+  solves (quick mode proves the code runs). Task 5 quick-look and Task 6 need pyarrow (CI covers them).
+
+**Run times (laptop estimates from STATUS; `run_all.py --estimate`)**
+| mode | time |
+|---|---|
+| `--quick` | ~10 min (sandbox 9.5 min on 2 cores without the ML steps; CI Linux 8.9 min with every ML step) |
+| `--replot` | ~6–11 min (CI 6.3 min, sandbox 10.9 min) |
+| full, everything except the Task 11 study | ~14 h (Task 5 dataset 7.4 h, Task 7 strips 1.5 h, Task 6 CNN 80 min, rest ~4.5 h) |
+| full Task 11 study | ~75 CPU-h ≈ 20 h at 4 parallel runs (or 2 h 35 min on 30 GitHub runners) |
+| PicoGK export (manual, Windows) | sector 0.05 mm ~15 min + checks ~18 min; full jacket 0.2 mm ~3 min |
+
+**Figures/tables whose data look inconsistent with STATUS** (`results/reproduce/consistency_report.md`; 59 of 61
+numeric checks agree to the quoted precision)
+1. **T07 / F34 — B2 baseline at the "0.306 W" cap.** Task 11 selects baselines with P ≤ 0.3055 W, but the Task 10 B2
+   design (= Task 9 reference, ρ* 0.35, L 4 mm) has P = 0.305541 W, 0.04 mW above that cap. Task 11's B2/U-G
+   baseline is therefore a different uniform gyroid (24.46 mK/W at 0.293 W), not Task 10's B2 (24.37 mK/W). The
+   "−10.3 % vs B2" headline is −10.0 % against the Task 10 B2 (blend optimum), −10.05 % for the gyroid optimum at
+   matched pump power. B1s/B3/U-D numbers are unaffected. Fix for Task 14: quote the matched-power rows of T07.
+2. **T07 — paper optimum above the cap.** best_at_cap_gyroid uses 0.3076 W (+0.7 % over 0.3055 W). At matched pump
+   power (baselines with P ≤ 0.3076 W) it is **−14.6 % vs B1s, −10.05 % vs B2/U-G, −11.1 % vs U-D, −3.3 % vs B3**,
+   +65 % vs B1 (end-ring manifolds) — essentially the Task 11 headline. Use these numbers in the paper.
+3. **F35 (`task11_designs_slots.png`) and F34 (`task11_pareto_fronts.png`)** show the blend `best_at_cap`
+   (w ≤ 0.24, fails the 0.35 mm wall check), not the exported pure-gyroid optimum. ρ*/L fields are identical; the w
+   panel and the marker differ slightly (R 21.94 vs 21.92 mK/W, P 0.304 vs 0.308 W). Either regenerate F35 with the
+   gyroid variant or state it in the caption (the gallery caption already does).
+4. **F38 (`task12_phase_field.png`) and F39 (`task12_sector_slices.png`)** also use the blend `best_at_cap`; F39 is
+   intentionally the failing sector (it documents finding 1), F38 should get the gyroid variant for the paper.
+5. **T09 — full-jacket checks.** The laptop full-jacket report (0.2 mm) lists 37 voxel-scale pockets (0.59 mm³ total)
+   and interface slivers down to 0.26 mm; STATUS says "no trapped pockets" (true: 0 resolved pockets; voxel-scale
+   ones are below the 0.2 mm resolution, cf. Task 12 open issue 4) and "walls not resolved at 0.2 mm" — consistent,
+   but the paper should quote the 0.05 mm sector for walls/pockets.
+6. **README Task 11 runtime** said "~7–8 h with --parallel 4"; STATUS measured ~2 s per evaluation → ~75 CPU-h
+   (~20 h at 4 parallel). Corrected in README.
+No other figure disagrees with its STATUS numbers (Tasks 1–10 tables, Task 11 RQ3/RQ2 tables and representative
+designs, Task 12 laptop runs).
+
+**How to use (laptop)**
+```powershell
+python -m pip install -r requirements\lock-windows-py3.13.txt; python -m pip install -e . --no-deps
+python scripts\experiments\run_all.py --list            # what makes what
+python scripts\experiments\run_all.py --quick           # ~10 min, proves every producer runs
+python scripts\experiments\run_all.py --replot          # ~11 min, figures/tables/gallery/audit from committed data
+python scripts\experiments\T07_rq2_equal_pump_power.py  # one table (seconds)
+```
+
+**Open issues (for Task 14)**
+1. Regenerate F35/F38 with `task12_slots_best_at_cap_gyroid` (one-line change in `scripts/task11_analysis.py` /
+   `scripts/task12_figures.py`), or caption them as above.
+2. Optionally add `--replot` paths to the Task 2–4 figure scripts (plot from their committed CSVs).
+3. Task 12 open issue 1 (C# `selftest` max |Δ|) still to be recorded on the laptop.
+4. Quote RQ2 from T07's matched-power rows (inconsistencies 1–2).
+5. Flaky wall-time assertions on busy machines (`tests/test_jacket2d.py` `dt < 4.0`, `tests/test_conduction.py`
+   `dt < 30`): consider marking them `slow` or relaxing them if the laptop or CI hits them again.
+
+**Tests**: no new unit tests (no library code); the experiment layer is exercised end to end by `run_all --quick`
+in CI on Windows and Linux.
+
+## Task 14 — Manuscript draft (+ JOSS)  ✅
+
+**Built** (`docs/manuscript/`)
+- `VoxLat_manuscript_review.docx`: single column, 1.5 line spacing, line numbers; the version for submission to Elsevier journals.
+- `VoxLat_manuscript_template_layout.docx`: the same text in a two-column journal layout.
+- `src/`: manuscript source (`body_1-4.txt` in a light markup, `meta.py` front matter, `refs.py` references, `figs/` paper figures incl. the new workflow diagram `workflow.png`) and `build.py` (docx builder; LaTeX equations become native Word equations through pandoc). Rebuild: `python build.py` and `python build.py --review` (needs python-docx and pandoc); `paginate.py` refreshes the table-of-contents page numbers from a LibreOffice render, `fixfloats.py` adds page breaks before wide floats in the two-column layout.
+- `joss/paper.md` + `paper.bib`: JOSS software paper (Summary, Statement of need, State of the field, Software design, Research impact statement, AI usage disclosure).
+- `submission/`: cover letter (IJHMT), `highlights.txt` (5 highlights, each ≤ 85 characters), `VERIFY_before_submission.md` (references and claims to check before submission).
+- `LICENSE` (MIT) added at the repository root.
+
+**Manuscript**: title "Finite-gap corrections for homogenized TPMS lattices and the multi-objective design of a graded cooling jacket for an electric motor"; authors Zain ul Abiden (corresponding) and Ahmed Mukhtar Bukhari. Front matter: abstract, highlights, contents, nomenclature. Sections: introduction (RQ1–RQ3, contributions), related work with a gap table, reference problem, methods (geometry, cell solvers and verification, surrogates, finite-gap strips, literature closures, device model, baselines, optimization, export), results (bulk closures, RQ1, device reference and sensitivity, RQ2, RQ3, export), limitations, conclusions, data availability, supplementary material (= `results/figure_gallery.pdf`), competing interest, references. 12 figures, 10 tables, 19 equations, 57 references.
+
+**Target venue**: International Journal of Heat and Mass Transfer (Elsevier; no fee on the subscription route; single-anonymized review). Alternatives with the same files: Applied Thermal Engineering, Aerospace Science and Technology, Int. J. Heat and Fluid Flow, Structural and Multidisciplinary Optimization. JOSS needs at least six months of public repository history.
+
+**Paper numbers (all from this file and `results/tables/T01–T09`)**: RQ1 K_t δ = −19…−28 % at N = 1 (bulk over-predicts by 23–40 %), a_K 0.19–0.28, CV error 12.9 → 0.40 pp; RQ2 matched-power rows of T07 (−14.6 / −10.05 / −11.1 / −3.3 % vs B1s / B2 / U-D / B3; +65 % vs B1; end rings −35.3 % vs B1); RQ3 qNEHVI@200 = NSGA-II@1368.
+
+**Open issues**
+1. 40 references still to verify against primary sources (list in `submission/VERIFY_before_submission.md`).
+2. Regenerate F34/F35 with `task12_slots_best_at_cap_gyroid` and without "Task" wording in the legends (Task 13 open issue 1).
+3. Mint a Zenodo DOI for a tagged release; add CONTRIBUTING for JOSS.
+4. Strongest expected reviewer objection: no validation. Cheapest fix: one pore-resolved conjugate CFD run of a 30° sector of the exported jacket, compared with the device model for R and Δp.

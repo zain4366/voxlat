@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- PicoGK side of the VoxLat export: GradedTpmsJacket (PicoGK.IImplicit) and JacketBuilder. -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>VoxLat.Export</RootNamespace>
+    <AssemblyName>VoxLat.Export</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VoxLat.Export.Core\VoxLat.Export.Core.csproj" />
+    <!-- Compile against your PicoGK.dll; do not copy it (Python loads it from PicoGKDir first). -->
+    <Reference Include="PicoGK">
+      <HintPath>$(PicoGKDir)\PicoGK.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="CheckPicoGK" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(PicoGKDir)\PicoGK.dll')"
+           Text="PicoGK.dll not found in PicoGKDir='$(PicoGKDir)'. Pass -p:PicoGKDir=&quot;&lt;folder with PicoGK.dll&gt;&quot;." />
+  </Target>
+</Project>

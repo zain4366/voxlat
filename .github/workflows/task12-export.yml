@@ -1,0 +1,94 @@
+# Task 12 - build the C# exporter against PicoGK 1.7.7.5, check it against the numpy mirror, and run a
+# headless PicoGK sector build with the Python checks (windows-latest ships what PicoGK's native
+# runtime needs). Run it from the Actions tab ("Run workflow"); it also runs on pushes that touch the
+# exporter. The STL, masks and reports are uploaded as the "task12-export" artifact.
+name: task12-export
+
+on:
+  workflow_dispatch:
+    inputs:
+      design:
+        description: "design JSON"
+        default: "results/designs/task11_slots_best_at_cap.json"
+      angle:
+        description: "sector angle (deg)"
+        default: "30"
+      voxel:
+        description: "voxel size (mm); 0.05 is the laptop default, 0.06-0.08 keeps the runner fast"
+        default: "0.06"
+  push:
+    paths:
+      - "src/voxlat/export/**"
+      - "tests/test_export*.py"
+      - "scripts/task12_export.py"
+      - ".github/workflows/task12-export.yml"
+
+jobs:
+  export:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      PICOGK_BIN: ${{ github.workspace }}\ext\picogk_bin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: leap71/PicoGK
+          ref: PicoGK-v1.7.7.5
+          path: ext/PicoGK
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build PicoGK (managed) and stage the native runtime
+        shell: pwsh
+        run: |
+          dotnet build ext/PicoGK/PicoGK.csproj -c Release -o "$env:PICOGK_BIN" -p:GeneratePackageOnBuild=false
+          Copy-Item ext/PicoGK/native/win-x64/* "$env:PICOGK_BIN"
+          Get-ChildItem "$env:PICOGK_BIN"
+
+      - name: Build VoxLat.Export (+ Core) and the probe
+        shell: pwsh
+        run: |
+          dotnet build src/voxlat/export/dotnet/VoxLat.Export/VoxLat.Export.csproj -c Release "-p:PicoGKDir=$env:PICOGK_BIN"
+          dotnet build src/voxlat/export/dotnet/VoxLat.Export.Probe/VoxLat.Export.Probe.csproj -c Release
+
+      - name: Install the Python package
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[export]
+
+      - name: C# implicit vs numpy mirror
+        shell: pwsh
+        run: |
+          pytest tests/test_export_dotnet.py tests/test_export.py -v -s
+          python scripts/task12_export.py selftest --method exe --out results/export_ci
+          python scripts/task12_export.py selftest --method pythonnet --out results/export_ci
+
+      - name: Headless PicoGK sector build + checks + numpy comparison
+        shell: pwsh
+        run: |
+          python scripts/task12_export.py build --mode sector --headless `
+            --design "${{ inputs.design || 'results/designs/task11_slots_best_at_cap.json' }}" `
+            --angle ${{ inputs.angle || '30' }} --voxel ${{ inputs.voxel || '0.06' }} `
+            --picogk-dir "$env:PICOGK_BIN" --out results/export_ci
+
+      - name: Headless PicoGK full jacket (coarse)
+        shell: pwsh
+        run: |
+          python scripts/task12_export.py build --mode full --headless --voxel 0.25 --no-numpy `
+            --design "${{ inputs.design || 'results/designs/task11_slots_best_at_cap.json' }}" `
+            --picogk-dir "$env:PICOGK_BIN" --out results/export_ci
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: task12-export
+          path: |
+            results/export_ci/*.json
+            results/export_ci/*.stl
+          retention-days: 14

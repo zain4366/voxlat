@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    VoxLat Task 12 - shared build settings.
+    PicoGKDir: folder that holds PicoGK.dll (the managed PicoGK 1.7 library you built) and, for running,
+    picogk.1.7.dll + its native dependencies. Override on the command line:
+      dotnet build -c Release -p:PicoGKDir="D:\nyron 2\PicoGK_Engine\bin\Release\net9.0"
+  -->
+  <PropertyGroup>
+    <PicoGKDir Condition="'$(PicoGKDir)' == ''">D:\nyron 2\PicoGK_Engine\bin\Release\net9.0</PicoGKDir>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <!-- run on the newest installed runtime (e.g. only .NET 10 installed): the probe exe would otherwise
+         fail with 0x80008096 "framework not found" -->
+    <RollForward>Major</RollForward>
+  </PropertyGroup>
+</Project>

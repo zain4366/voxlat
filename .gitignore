@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Environments
+.venv/
+venv/
+env/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+desktop.ini
+tempCodeRunnerFile.py
+!legacy/tempCodeRunnerFile.py
+
+# Large / regenerable outputs (keep folders via .gitkeep)
+data/fields/
+# Task 5: per-sample resume cache + run logs (data/closures.parquet is the deliverable)
+data/*_parts/
+data/*_build.log
+# Task 7: per-strip / per-bulk-cell resume cache (data/finite_gap.csv is the deliverable)
+data/finite_gap/
+results/task7_velocity_fields.npz
+results/task7_quick/
+*.stl
+*.vdb
+models/**/*.pt
+models/**/*.pkl
+results/designs/*.stl
+results/scratch/
+
+# .NET build output (Task 12)
+bin/
+obj/
+
+# Task 12: voxel masks and CI exports are regenerable (reports/configs *.json are kept)
+results/export/*.bin
+results/export_ci/
+
+# Task 13: run logs of scripts/experiments/run_all.py (the consistency report is committed)
+results/reproduce/*/

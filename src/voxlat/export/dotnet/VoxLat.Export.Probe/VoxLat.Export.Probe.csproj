@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Command-line probe: evaluates the C# implicit at points from a file (cross-check vs numpy, CI). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>VoxLat.Export</RootNamespace>
+    <AssemblyName>VoxLat.Export.Probe</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\VoxLat.Export.Core\VoxLat.Export.Core.csproj" />
+  </ItemGroup>
+</Project>

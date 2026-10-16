@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Geometry math of the VoxLat export (no PicoGK dependency): design fields, phase tables,
+       graded TPMS signed distance, mask/report IO. Mirrors voxlat/export/field.py. -->
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>VoxLat.Export</RootNamespace>
+    <AssemblyName>VoxLat.Export.Core</AssemblyName>
+  </PropertyGroup>
+</Project>
