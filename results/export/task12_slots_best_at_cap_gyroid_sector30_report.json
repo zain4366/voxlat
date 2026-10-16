@@ -1,0 +1,49 @@
+{
+  "schema": "voxlat-export-report/1",
+  "config": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_sector30_config.json",
+  "design": "D:\\voxlat_git\\results\\designs\\task12_slots_best_at_cap_gyroid.json",
+  "design_label": "best_at_cap_gyroid",
+  "layout": "slots",
+  "mode": "sector",
+  "picogk_version": "1.7.1",
+  "voxel_mm": 0.05000000074505806,
+  "sector_center_deg": 173.75,
+  "sector_angle_deg": 30,
+  "render_half_angle_deg": 16.602679147219085,
+  "stl_frame": "sector-local: world rotated by -sector_center_deg about z (sector centred on \u002Bx)",
+  "render_box_mm": [
+    66.58164,
+    -25.21592,
+    -2.5,
+    87,
+    25.21592,
+    52.5
+  ],
+  "volume_raw_mm3": 13114.969,
+  "volume_clean_mm3": 13102.8545,
+  "volume_output_mm3": 11732.377,
+  "sliver_radius_mm": 0.175,
+  "sliver_band_mm": 0.44999999999999996,
+  "output_bbox_mm": [
+    67.65,
+    -20.550001,
+    -2,
+    85.75,
+    20.550001,
+    52
+  ],
+  "stl": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_sector30.stl",
+  "triangles": 20327664,
+  "mask": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_sector30_mask.json",
+  "mask_raw": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_sector30_mask_raw.json",
+  "field": {"circumferential_mode":"integer","N_theta":152,"cells_around_min":146.9159941878488,"cells_around_max":158.03211996624788,"integer_N_max_size_deviation":0.039684999777946484,"seam_rib":false,"table":[2048,257]},
+  "timings_s": {
+    "tables": 0.2082952,
+    "render": 164.1091788,
+    "mask_raw": 59.3453398,
+    "opening": 561.0690821,
+    "mask": 26.6323958,
+    "stl": 10.949589,
+    "total": 858.6848972
+  }
+}

@@ -1,0 +1,165 @@
+{
+ "volume_fraction_raw": {
+  "voxel_mm": 0.07,
+  "n_voxels": 34148400,
+  "solid_fraction": 0.5000018156048307,
+  "target_rho_mean": 0.5,
+  "relative_error": 3.6312096614032896e-06,
+  "core_relative_error": 2.946944410053831e-06,
+  "near_wall_relative_error": 4.8266469525604094e-06,
+  "core_fraction_of_voxels": 0.6359715242881072,
+  "phase_aware_expected": 0.5,
+  "relative_error_vs_phase_aware": 3.6312096614032896e-06,
+  "core_relative_error_vs_phase_aware": 2.946944410053831e-06,
+  "near_wall_relative_error_vs_phase_aware": 4.8266469525604094e-06,
+  "patches": {
+   "size_mm": 4.37328196,
+   "count": 108,
+   "vs_design_mean_abs_rel_error": 0.0002699321042674018,
+   "vs_design_max_abs_rel_error": 0.0010852837305294072,
+   "vs_phase_aware_mean_abs_rel_error": 0.00026993210426739356,
+   "vs_phase_aware_max_abs_rel_error": 0.0010852837305294072
+  }
+ },
+ "wall_raw_interior": {
+  "evaluated_voxels": 16716085,
+  "resolution_mm": [
+   -0.052500000000000005,
+   0.052500000000000005
+  ],
+  "thin_voxels_at_limit": 0,
+  "min_wall_mm": 0.6648437500000001
+ },
+ "checks": {
+  "voxel_mm": 0.07,
+  "shape": [
+   293,
+   723,
+   1016
+  ],
+  "source": "numpy",
+  "kind": "clean",
+  "limits": {
+   "min_wall_mm": 0.35,
+   "min_pore_mm": 0.8,
+   "interface_band_mm": 0.49
+  },
+  "wall_resolved": true,
+  "wall": {
+   "evaluated_voxels": 16716085,
+   "resolution_mm": [
+    -0.052500000000000005,
+    0.052500000000000005
+   ],
+   "thin_voxels_at_limit": 0,
+   "min_wall_mm": 0.6648437500000001
+  },
+  "interface_slivers": {
+   "min_wall_mm": 0.36015624999999996,
+   "thin_voxels": 0,
+   "thin_volume_mm3": 0.0,
+   "band_mm": 0.49
+  },
+  "trapped_pockets": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest": [],
+   "voxel_scale_count": 0,
+   "voxel_scale_volume_mm3": 0.0,
+   "voxel_scale_largest": [],
+   "resolution_diameter_mm": 0.21000000000000002,
+   "_note": "run before the voxel-scale pocket rule; counts were 0 under both rules"
+  },
+  "paths": [
+   {
+    "from": "inlet",
+    "to": "outlet",
+    "connected": true,
+    "throat_mm": 0.78515625,
+    "terminal_voxels": [
+     6026496,
+     6026496
+    ]
+   }
+  ],
+  "connected": true,
+  "min_throat_mm": 0.78515625,
+  "loose_solid": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest_voxels": 0,
+   "solid_components": 1
+  },
+  "pass": {
+   "min_wall": true,
+   "min_pore": true,
+   "connected": true,
+   "no_trapped_pockets": true,
+   "no_loose_solid": true
+  },
+  "all_pass": true,
+  "wall_time_s": 373.91188366499955
+ },
+ "field": {
+  "circumferential_mode": "integer",
+  "circumferential_stretch_min": 1.0003336651591426,
+  "circumferential_stretch_max": 1.0003336651591426,
+  "axial_phase_shear_deg_p95": 0.0,
+  "circumferential_phase_shear_deg_p95": 0.0,
+  "seam_angle_deg": 0.0,
+  "seam_rib": false,
+  "seam_rib_mm": 0.0,
+  "integer_N_max_size_deviation": 0.000333665159142571,
+  "N_theta": 214,
+  "cells_around_min": 214.07140434405653,
+  "cells_around_max": 214.07140434405653,
+  "circumferential_size_deviation_min": 0.000333665159142571,
+  "circumferential_size_deviation_max": 0.000333665159142571,
+  "axial_cells_min": 22.866122265759323,
+  "axial_cells_max": 22.866122265759323,
+  "axial_phase_shear_deg_max": 4.868488442981838e-13,
+  "circumferential_phase_shear_deg_max": 0.0,
+  "axial_phase_origin_mm": 25.0,
+  "radial_cells_min": 2.74393467189113,
+  "radial_cells_max": 2.743934671891131,
+  "conformal_size_ratio_inner": 0.9597315436241611,
+  "conformal_size_ratio_outer": 1.0402684563758389,
+  "table": [
+   2048,
+   257
+  ]
+ },
+ "generation_s": 91.13210467200042,
+ "volume_raw_mm3": 18198.970832000006,
+ "volume_clean_mm3": 18189.615850000006,
+ "config": {
+  "design_label": "min_R",
+  "layout": "end_rings",
+  "render": {
+   "mode": "sector",
+   "voxel_size_mm": 0.07,
+   "sector_center_deg": 31.249999999999996,
+   "sector_angle_deg": 30.0,
+   "sector_margin_mm": 2.0,
+   "sliver_radius_mm": 0.175,
+   "sliver_band_mm": 0.49,
+   "save_stl": true,
+   "write_mask": true,
+   "write_raw_mask": true,
+   "show_in_viewer": true,
+   "output_dir": "/home/user/voxlat/results/export",
+   "name": "end_rings_min_R_sector30"
+  },
+  "critical_location": {
+   "theta_deg": 31.249999999999996,
+   "z_mm": 49.75247524752475,
+   "L_over_Lmin": 1.0100020195451986,
+   "rho": 0.49999999999999994,
+   "w": 0.9999999999999999,
+   "L_mm": 2.1866409799999986,
+   "L_min_mm": 2.164986740308339
+  }
+ },
+ "total_s": 770.4197754310007,
+ "peak_rss_GB": 3.56178
+}

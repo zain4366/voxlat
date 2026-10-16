@@ -1,0 +1,218 @@
+{
+ "sanity": {
+  "raw": {
+   "z_slices_mm": [
+    11.450000058859587,
+    25.00000026077032,
+    38.550000462681055
+   ],
+   "iou": [
+    0.9999775424727984,
+    0.999989864899105,
+    0.9999763420000474
+   ],
+   "iou_min": 0.9999763420000474
+  },
+  "clean": {
+   "z_slices_mm": [
+    11.400000106543303,
+    24.950000308454037,
+    38.55000051110983
+   ],
+   "iou": [
+    0.9992340703528908,
+    0.9996752719597337,
+    0.999030033475674
+   ],
+   "iou_min": 0.999030033475674
+  }
+ },
+ "checked_angle_deg": 23,
+ "volume_fraction_raw": {
+  "voxel_mm": 0.05000000074505806,
+  "n_voxels": 37355607,
+  "solid_fraction": 0.3938312660800827,
+  "target_rho_mean": 0.39408766715877036,
+  "relative_error": -0.0006506193927260373,
+  "core_relative_error": 0.00037545858876564253,
+  "near_wall_relative_error": -0.002266745139856141,
+  "core_fraction_of_voxels": 0.6118801121341704,
+  "phase_aware_expected": 0.39403283725005867,
+  "relative_error_vs_phase_aware": -0.0005115593192250856,
+  "core_relative_error_vs_phase_aware": 0.0010133173932029838,
+  "near_wall_relative_error_vs_phase_aware": -0.0029102403187324377,
+  "patches": {
+   "size_mm": 6.658033711962518,
+   "count": 16,
+   "vs_design_mean_abs_rel_error": 0.0036804240171880165,
+   "vs_design_max_abs_rel_error": 0.008811077980597881,
+   "vs_phase_aware_mean_abs_rel_error": 0.004126119955766561,
+   "vs_phase_aware_max_abs_rel_error": 0.01017149200315437
+  }
+ },
+ "wall_raw_interior": {
+  "evaluated_voxels": 14285635,
+  "resolution_mm": [
+   -0.037500000558793545,
+   0.037500000558793545
+  ],
+  "thin_voxels_at_limit": 0,
+  "min_wall_mm": 0.4820312499999999
+ },
+ "numpy_vs_picogk_raw": {
+  "voxel_mm": 0.05000000074505806,
+  "common_shape": [
+   366,
+   787,
+   1085
+  ],
+  "solid_a": 80664680,
+  "solid_b": 80925535,
+  "volume_a_mm3": 10083.085450749031,
+  "volume_b_mm3": 10115.692327206672,
+  "volume_rel_diff": 0.003233819312244219,
+  "iou": 0.9967603196962368,
+  "mismatch_voxels": 262175,
+  "solid_outside_common_a": 0,
+  "solid_outside_common_b": 0
+ },
+ "checks": {
+  "voxel_mm": 0.05000000074505806,
+  "shape": [
+   381,
+   787,
+   1086
+  ],
+  "source": "picogk",
+  "kind": "clean",
+  "limits": {
+   "min_wall_mm": 0.35,
+   "min_pore_mm": 0.8,
+   "interface_band_mm": 0.4500000014901161
+  },
+  "wall_resolved": true,
+  "wall": {
+   "evaluated_voxels": 14285635,
+   "resolution_mm": [
+    -0.037500000558793545,
+    0.037500000558793545
+   ],
+   "thin_voxels_at_limit": 0,
+   "min_wall_mm": 0.4820312499999999
+  },
+  "interface_slivers": {
+   "min_wall_mm": 0.328125,
+   "thin_voxels": 95,
+   "thin_volume_mm3": 0.011875000530853875,
+   "band_mm": 0.4500000014901161
+  },
+  "trapped_pockets": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest": [],
+   "voxel_scale_count": 0,
+   "voxel_scale_volume_mm3": 0.0,
+   "voxel_scale_largest": [],
+   "resolution_diameter_mm": 0.15000000223517418
+  },
+  "paths": [
+   {
+    "from": "cut_face_lo",
+    "to": "outlet",
+    "connected": true,
+    "throat_mm": 1.06640625,
+    "terminal_voxels": [
+     148825,
+     39543773
+    ]
+   },
+   {
+    "from": "cut_face_hi",
+    "to": "outlet",
+    "connected": true,
+    "throat_mm": 1.16015625,
+    "terminal_voxels": [
+     145022,
+     39543773
+    ]
+   }
+  ],
+  "connected": true,
+  "min_throat_mm": 1.06640625,
+  "loose_solid": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest_voxels": 0,
+   "solid_components": 9
+  },
+  "pass": {
+   "min_wall": true,
+   "min_pore": true,
+   "connected": true,
+   "no_trapped_pockets": true,
+   "no_loose_solid": true
+  },
+  "all_pass": true,
+  "wall_time_s": 582.4060596000636
+ },
+ "picogk_report": {
+  "schema": "voxlat-export-report/1",
+  "config": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_sector30_config.json",
+  "design": "D:\\voxlat_git\\results\\designs\\task12_slots_best_at_cap_gyroid.json",
+  "design_label": "best_at_cap_gyroid",
+  "layout": "slots",
+  "mode": "sector",
+  "picogk_version": "1.7.1",
+  "voxel_mm": 0.05000000074505806,
+  "sector_center_deg": 173.75,
+  "sector_angle_deg": 30,
+  "render_half_angle_deg": 16.602679147219085,
+  "stl_frame": "sector-local: world rotated by -sector_center_deg about z (sector centred on +x)",
+  "render_box_mm": [
+   66.58164,
+   -25.21592,
+   -2.5,
+   87,
+   25.21592,
+   52.5
+  ],
+  "volume_raw_mm3": 13114.969,
+  "volume_clean_mm3": 13102.8545,
+  "volume_output_mm3": 11732.377,
+  "sliver_radius_mm": 0.175,
+  "sliver_band_mm": 0.44999999999999996,
+  "output_bbox_mm": [
+   67.65,
+   -20.550001,
+   -2,
+   85.75,
+   20.550001,
+   52
+  ],
+  "stl": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_sector30.stl",
+  "triangles": 20327664,
+  "mask": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_sector30_mask.json",
+  "mask_raw": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_sector30_mask_raw.json",
+  "field": {
+   "circumferential_mode": "integer",
+   "N_theta": 152,
+   "cells_around_min": 146.9159941878488,
+   "cells_around_max": 158.03211996624788,
+   "integer_N_max_size_deviation": 0.039684999777946484,
+   "seam_rib": false,
+   "table": [
+    2048,
+    257
+   ]
+  },
+  "timings_s": {
+   "tables": 0.2082952,
+   "render": 164.1091788,
+   "mask_raw": 59.3453398,
+   "opening": 561.0690821,
+   "mask": 26.6323958,
+   "stl": 10.949589,
+   "total": 858.6848972
+  }
+ }
+}

@@ -1,0 +1,11 @@
+{
+ "schema": "voxlat-mask/1",
+ "shape": [381, 915, 1085],
+ "origin_mm": [66.9000015258789, -22.850000381469727, -2.1000001430511475],
+ "voxel_mm": 0.05000000074505806,
+ "frame": {"mode": "sector", "sector_center_deg": 173.75, "half_angle_deg": 16.602679147219085, "nominal_half_angle_deg": 14.999999999999998},
+ "source": "picogk",
+ "kind": "raw",
+ "order": "slices along z; inside a slice x fastest then y; bit 1 = solid; little-endian bits",
+ "meta": {"design": "best_at_cap_gyroid", "voxel_origin_index": [1338, -457, -42]}
+}

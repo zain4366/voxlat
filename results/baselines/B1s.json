@@ -1,0 +1,127 @@
+{
+  "design": {
+    "family": "B1s",
+    "type": "channel",
+    "channel_width": 0.0009,
+    "rib_thickness": 0.00035,
+    "n_starts": 1,
+    "layout": "circumferential"
+  },
+  "thermal_resistance": 0.025666818304536525,
+  "T_wall_max": 342.9134500944931,
+  "T_wall_max_lattice": 337.2172244064292,
+  "T_wall_max_active": 337.2172244064292,
+  "R_active": 0.018269122605752214,
+  "T_wall_max_s": 0.23342365269243964,
+  "T_wall_max_z": 0.00125,
+  "T_wall_mean": 329.4512073479171,
+  "T_in": 323.15,
+  "T_out": 327.4230299666978,
+  "heat_input": 769.9999999999999,
+  "delta_p": 1088.318050142601,
+  "pump_power": 0.1813863416904335,
+  "hydraulic_power": 0.05441590250713005,
+  "flow_rate": 5e-05,
+  "mass": 0.31896709203426343,
+  "mass_lattice": 0.09825646365172072,
+  "mass_ribs": 0.09825646365172072,
+  "mass_walls": 0.22071062838254268,
+  "coolant_volume": 0.00010362901796313393,
+  "min_structural_margin": 4.245553142408065,
+  "lattice_margin": 4.245553142408065,
+  "outer_wall_margin": 12.740422966654878,
+  "structural": {
+    "sigma_vm_max": 18843245.46568371,
+    "tau_torque": 85535.82967389986,
+    "tau_thrust": 198763.88420472477,
+    "sigma_thrust_bending": 6814761.744161993,
+    "sigma_pressure": 713212.3238947708,
+    "pressure": 201088.3180501426,
+    "rib_pressure_share": 0.9930932469221783,
+    "root_stress_factor": 2.5,
+    "outer_wall_hoop": 54513.04386456765,
+    "outer_wall_channel_bending": 20360.192202576938,
+    "outer_wall_slot_bending": 6279226.381210543
+  },
+  "manufacturable": true,
+  "manufacturability": {
+    "within_bounds": true,
+    "rib_ok": true,
+    "channel_ok": true,
+    "rib_thickness": 0.00035,
+    "channel_width": 0.0009,
+    "manufacturable": true
+  },
+  "mass_balance_error": 2.710505431213761e-16,
+  "max_cell_divergence": 0.0,
+  "energy_balance_error": 1.3637991169280097e-12,
+  "picard_iterations": 0,
+  "picard_converged": true,
+  "diagnostics": {
+    "D_h": 0.001565217391304348,
+    "aspect_ratio": 0.15,
+    "n_channels": 80.0,
+    "channel_flow": 6.25e-07,
+    "velocity": 0.11574074074074076,
+    "reynolds": 78.76496534341526,
+    "dean": 8.072857461430992,
+    "d_ratio": 0.01050481470674059,
+    "re_crit": 4845.957007387531,
+    "regime": "laminar",
+    "friction": 1.0863893768597948,
+    "nusselt": 6.996225751581113,
+    "h_c": 1787.9243587373956,
+    "path_length": 0.21904865269243962,
+    "helix_angle": 0.0,
+    "curvature_radius": 0.07450000000000001,
+    "delta_p": 1088.318050142601,
+    "dp_entrance": 8.87479638203018,
+    "graetz_inverse": 0.08573935425401445,
+    "U_eff": 10809.23943848829,
+    "rib_efficiency": 0.5547595510720231,
+    "rib_conductance_per_length": 11.902417375246708,
+    "area_enhancement": 6.045691690291421,
+    "sleeve_spreading_efficiency": 0.9993815624014606,
+    "heat_to_manifold_plenums": {
+      "inlet": 1.5219135522032972,
+      "outlet": 1.4841326911870518
+    },
+    "manifold_htc": 179.5,
+    "grid": [
+      376,
+      20
+    ]
+  },
+  "wall_time": 0.050834199999371776,
+  "selection_rule": {
+    "objective": "thermal_resistance at 3 L/min",
+    "pump_power_cap": 0.3055407983907115,
+    "constraints": [
+      "manufacturable",
+      "min_structural_margin >= 1"
+    ]
+  },
+  "run_record": {
+    "params": {
+      "family": "B1s",
+      "type": "channel",
+      "channel_width": 0.0009,
+      "rib_thickness": 0.00035,
+      "n_starts": 1,
+      "layout": "circumferential"
+    },
+    "params_json": "{\"channel_width\": 0.0009, \"family\": \"B1s\", \"layout\": \"circumferential\", \"n_starts\": 1, \"rib_thickness\": 0.00035, \"type\": \"channel\"}",
+    "voxlat_version": "0.1.0",
+    "git_hash": "9a95c4caccfa+dirty",
+    "resolution": [
+      376,
+      20
+    ],
+    "wall_time_s": 0.050834199999371776,
+    "timestamp_utc": "2026-10-10T17:49:55+00:00",
+    "python": "3.13.7",
+    "numpy": "2.5.3",
+    "platform": "Windows-11",
+    "extra": {}
+  }
+}

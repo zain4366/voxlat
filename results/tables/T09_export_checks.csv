@@ -1,0 +1,7 @@
+design,geometry,source,voxel_mm,min_wall_mm,sliver_min_mm,throat_mm,connected,pockets,voxel_scale_pockets,loose_solid,all_pass,vf_err_vs_design_pct,iou_vs_numpy,picogk_total_s,triangles,file
+end_rings_knee,30 deg sector,numpy mirror,0.07,0.380469,0.360156,1.44141,True,0,0,0,True,0.0269264,,,,results/export/end_rings_knee_sector30_numpy_checks.json
+end_rings_min_R,30 deg sector,numpy mirror,0.07,0.664844,0.360156,0.785156,True,0,0,0,True,0.000363121,,,,results/export/end_rings_min_R_sector30_numpy_checks.json
+slots_best_at_cap,30 deg sector,numpy mirror,0.06,0.30625,,1.54688,True,0,2,0,False,0.766566,,,,results/export/slots_best_at_cap_sector30_numpy_checks.json
+task12_slots_best_at_cap_gyroid,full jacket,PicoGK (laptop),0.2,,0.2625,1.21875,True,0,37,0,True,,,144.285,1.50365e+07,results/export/task12_slots_best_at_cap_gyroid_full_checks.json
+task12_slots_best_at_cap_gyroid,30 deg sector,PicoGK (laptop),0.05,0.482031,0.328125,1.06641,True,0,0,0,True,-0.0650619,0.99676,858.685,2.03277e+07,results/export/task12_slots_best_at_cap_gyroid_sector30_checks.json
+task12_slots_best_at_cap_gyroid,30 deg sector,numpy mirror,0.06,0.502344,0.360156,1.03125,True,0,1,0,True,0.0987023,,,,results/export/task12_slots_best_at_cap_gyroid_sector30_numpy_checks.json

@@ -1,0 +1,251 @@
+{
+ "volume_fraction_raw": {
+  "voxel_mm": 0.06,
+  "n_voxels": 54218340,
+  "solid_fraction": 0.2100151719879288,
+  "target_rho_mean": 0.20841751419346405,
+  "relative_error": 0.007665659964554372,
+  "core_relative_error": 3.9231195724021006e-05,
+  "near_wall_relative_error": 0.01676297858467879,
+  "core_fraction_of_voxels": 0.5436619785851061,
+  "phase_aware_expected": 0.20895257269053813,
+  "relative_error_vs_phase_aware": 0.005085361159751889,
+  "core_relative_error_vs_phase_aware": 0.005349005926707617,
+  "near_wall_relative_error_vs_phase_aware": 0.004776216926594579,
+  "patches": {
+   "size_mm": 6.658033711962518,
+   "count": 48,
+   "vs_design_mean_abs_rel_error": 0.014162776732764561,
+   "vs_design_max_abs_rel_error": 0.07226125279944884,
+   "vs_phase_aware_mean_abs_rel_error": 0.013550531537507696,
+   "vs_phase_aware_max_abs_rel_error": 0.06246057179958764
+  }
+ },
+ "wall_raw_interior": {
+  "evaluated_voxels": 11386674,
+  "resolution_mm": [
+   -0.045,
+   0.045
+  ],
+  "thin_voxels_at_limit": 230,
+  "thin_regions": 60,
+  "largest_thin_regions_index": [
+   [
+    87.76470588235294,
+    279.5,
+    47.61764705882353
+   ],
+   [
+    126.46666666666667,
+    274.8,
+    47.53333333333333
+   ],
+   [
+    89.91666666666667,
+    523.25,
+    60.083333333333336
+   ],
+   [
+    130.91666666666669,
+    572.0833333333333,
+    54.083333333333336
+   ],
+   [
+    161.36363636363637,
+    228.72727272727272,
+    52.27272727272727
+   ]
+  ],
+  "largest_thin_regions_voxels": [
+   34,
+   15,
+   12,
+   12,
+   11
+  ],
+  "min_wall_mm": 0.30624999999999997
+ },
+ "checks": {
+  "voxel_mm": 0.06,
+  "shape": [
+   343,
+   843,
+   918
+  ],
+  "source": "numpy",
+  "kind": "clean",
+  "limits": {
+   "min_wall_mm": 0.35,
+   "min_pore_mm": 0.8,
+   "interface_band_mm": 0.47
+  },
+  "wall_resolved": true,
+  "wall": {
+   "evaluated_voxels": 11386674,
+   "resolution_mm": [
+    -0.045,
+    0.045
+   ],
+   "thin_voxels_at_limit": 230,
+   "thin_regions": 60,
+   "largest_thin_regions_voxels": [
+    34,
+    15,
+    12,
+    12,
+    11
+   ],
+   "min_wall_mm": 0.30624999999999997,
+   "largest_thin_regions_mm": [
+    [
+     71.80588235294117,
+     -8.489999999999998,
+     0.33705882352941163
+    ],
+    [
+     74.12799999999999,
+     -8.771999999999998,
+     0.33199999999999985
+    ],
+    [
+     71.93499999999999,
+     6.135000000000002,
+     1.085
+    ],
+    [
+     74.395,
+     9.064999999999998,
+     0.7250000000000001
+    ],
+    [
+     76.22181818181818,
+     -11.536363636363635,
+     0.6163636363636362
+    ]
+   ]
+  },
+  "interface_slivers": {
+   "min_wall_mm": null,
+   "thin_voxels": 0,
+   "thin_volume_mm3": 0.0,
+   "band_mm": 0.47
+  },
+  "trapped_pockets": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest": [],
+   "voxel_scale_count": 2,
+   "voxel_scale_volume_mm3": 0.0012959999999999998,
+   "voxel_scale_largest": [
+    {
+     "voxels": 5,
+     "centre_mm": [
+      76.38,
+      -13.079999999999998,
+      47.94
+     ]
+    },
+    {
+     "voxels": 1,
+     "centre_mm": [
+      76.25999999999999,
+      -13.799999999999999,
+      0.06000000000000005
+     ]
+    }
+   ],
+   "resolution_diameter_mm": 0.18
+  },
+  "paths": [
+   {
+    "from": "cut_face_lo",
+    "to": "cut_face_hi",
+    "connected": true,
+    "throat_mm": 1.546875,
+    "terminal_voxels": [
+     130559,
+     130769
+    ]
+   }
+  ],
+  "connected": true,
+  "min_throat_mm": 1.546875,
+  "loose_solid": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest_voxels": 0,
+   "solid_components": 9
+  },
+  "pass": {
+   "min_wall": false,
+   "min_pore": true,
+   "connected": true,
+   "no_trapped_pockets": true,
+   "no_loose_solid": true
+  },
+  "all_pass": false,
+  "wall_time_s": 352.1303491280014
+ },
+ "field": {
+  "circumferential_mode": "integer",
+  "circumferential_stretch_min": 0.9665525933411108,
+  "circumferential_stretch_max": 1.0396849997779465,
+  "axial_phase_shear_deg_p95": 6.350793506675515,
+  "circumferential_phase_shear_deg_p95": 21.366779320531872,
+  "seam_angle_deg": 0.0,
+  "seam_rib": false,
+  "seam_rib_mm": 0.0,
+  "integer_N_max_size_deviation": 0.039684999777946484,
+  "N_theta": 152,
+  "cells_around_min": 146.91599418784884,
+  "cells_around_max": 158.03211996624788,
+  "circumferential_size_deviation_min": -0.033447406658889234,
+  "circumferential_size_deviation_max": 0.039684999777946484,
+  "axial_cells_min": 10.316433001678162,
+  "axial_cells_max": 22.472217552320227,
+  "axial_phase_shear_deg_max": 9.060417477999485,
+  "circumferential_phase_shear_deg_max": 23.447088315294028,
+  "axial_phase_origin_mm": 25.0,
+  "radial_cells_min": 1.195892883963399,
+  "radial_cells_max": 2.745305664181376,
+  "conformal_size_ratio_inner": 0.9597315436241611,
+  "conformal_size_ratio_outer": 1.0402684563758389,
+  "table": [
+   2048,
+   257
+  ]
+ },
+ "generation_s": 145.76696456299942,
+ "volume_raw_mm3": 11983.125527999999,
+ "volume_clean_mm3": 11983.125527999999,
+ "config": {
+  "design_label": "best_at_cap",
+  "layout": "slots",
+  "render": {
+   "mode": "sector",
+   "voxel_size_mm": 0.06,
+   "sector_center_deg": 262.75,
+   "sector_angle_deg": 30.0,
+   "sector_margin_mm": 2.0,
+   "sliver_radius_mm": 0.175,
+   "sliver_band_mm": 0.47,
+   "save_stl": true,
+   "write_mask": true,
+   "write_raw_mask": true,
+   "show_in_viewer": true,
+   "output_dir": "/home/user/voxlat/results/export",
+   "name": "slots_best_at_cap_sector30"
+  },
+  "critical_location": {
+   "theta_deg": 262.75,
+   "z_mm": 0.24752475247524752,
+   "L_over_Lmin": 1.0757226140078953,
+   "rho": 0.21047533371040028,
+   "w": 0.2340454113280652,
+   "L_mm": 2.6301650128746656,
+   "L_min_mm": 2.445021587001202
+  }
+ },
+ "total_s": 962.797269699,
+ "peak_rss_GB": 6.104988
+}

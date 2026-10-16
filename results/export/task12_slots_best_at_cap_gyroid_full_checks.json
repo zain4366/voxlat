@@ -1,0 +1,213 @@
+{
+ "checks": {
+  "voxel_mm": 0.20000000298023224,
+  "shape": [
+   861,
+   801,
+   277
+  ],
+  "source": "picogk",
+  "kind": "clean",
+  "limits": {
+   "min_wall_mm": 0.35,
+   "min_pore_mm": 0.8,
+   "interface_band_mm": 0.7500000059604645
+  },
+  "wall_resolved": false,
+  "wall": {
+   "evaluated_voxels": 4106125,
+   "resolution_mm": [
+    -0.15000000223517418,
+    0.15000000223517418
+   ],
+   "thin_voxels_at_limit": 0,
+   "min_wall_mm": 0.43124999999999997
+  },
+  "interface_slivers": {
+   "min_wall_mm": 0.26249999999999996,
+   "thin_voxels": 26,
+   "thin_volume_mm3": 0.2080000092983247,
+   "band_mm": 0.7500000059604645
+  },
+  "trapped_pockets": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest": [],
+   "voxel_scale_count": 37,
+   "voxel_scale_volume_mm3": 0.5920000264644627,
+   "voxel_scale_largest": [
+    {
+     "voxels": 5,
+     "centre_mm": [
+      74.20000238716602,
+      -22.199999138712883,
+      33.60000039637089
+     ]
+    },
+    {
+     "voxels": 5,
+     "centre_mm": [
+      66.20000226795673,
+      40.200001791119576,
+      23.600000247359276
+     ]
+    },
+    {
+     "voxels": 4,
+     "centre_mm": [
+      63.600002229213715,
+      44.20000185072422,
+      19.300000183284283
+     ]
+    },
+    {
+     "voxels": 4,
+     "centre_mm": [
+      -52.19999949634075,
+      57.200002044439316,
+      32.100000374019146
+     ]
+    },
+    {
+     "voxels": 3,
+     "centre_mm": [
+      57.400002136826515,
+      52.00000196695328,
+      5.399999976158142
+     ]
+    },
+    {
+     "voxels": 3,
+     "centre_mm": [
+      -50.19999946653843,
+      59.000002071261406,
+      32.20000037550926
+     ]
+    },
+    {
+     "voxels": 3,
+     "centre_mm": [
+      -58.99999959766865,
+      50.20000194013119,
+      27.000000298023224
+     ]
+    },
+    {
+     "voxels": 3,
+     "centre_mm": [
+      -44.399999380111694,
+      63.400002136826515,
+      37.60000045597553
+     ]
+    },
+    {
+     "voxels": 3,
+     "centre_mm": [
+      -49.3999994546175,
+      59.6000020802021,
+      34.80000041425228
+     ]
+    },
+    {
+     "voxels": 2,
+     "centre_mm": [
+      -70.79999977350235,
+      31.400001659989357,
+      2.09999992698431
+     ]
+    }
+   ],
+   "resolution_diameter_mm": 0.6000000089406967
+  },
+  "paths": [
+   {
+    "from": "inlet",
+    "to": "outlet",
+    "connected": true,
+    "throat_mm": 1.21875,
+    "terminal_voxels": [
+     613892,
+     613864
+    ]
+   }
+  ],
+  "connected": true,
+  "min_throat_mm": 1.21875,
+  "loose_solid": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest_voxels": 0,
+   "solid_components": 1
+  },
+  "pass": {
+   "min_wall": null,
+   "min_pore": true,
+   "connected": true,
+   "no_trapped_pockets": true,
+   "no_loose_solid": true
+  },
+  "all_pass": true,
+  "wall_time_s": 592.2023035000311
+ },
+ "picogk_report": {
+  "schema": "voxlat-export-report/1",
+  "config": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_full_config.json",
+  "design": "D:\\voxlat_git\\results\\designs\\task12_slots_best_at_cap_gyroid.json",
+  "design_label": "best_at_cap_gyroid",
+  "layout": "slots",
+  "mode": "full",
+  "picogk_version": "1.7.1",
+  "voxel_mm": 0.20000000298023224,
+  "sector_center_deg": 0,
+  "sector_angle_deg": 30,
+  "render_half_angle_deg": -1,
+  "stl_frame": "world: z = motor axis, z = 0 at the start of the heated length, x = inlet manifold",
+  "render_box_mm": [
+   -87,
+   -87,
+   -2.5,
+   87,
+   87,
+   52.5
+  ],
+  "volume_raw_mm3": 136345.14,
+  "volume_clean_mm3": 136304.27,
+  "volume_output_mm3": 136304.27,
+  "sliver_radius_mm": 0.175,
+  "sliver_band_mm": 0.75,
+  "output_bbox_mm": [
+   -85.4,
+   -79.4,
+   -2,
+   85.4,
+   79.4,
+   52
+  ],
+  "stl": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_full.stl",
+  "triangles": 15036516,
+  "mask": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_full_mask.json",
+  "mask_raw": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_full_mask_raw.json",
+  "field": {
+   "circumferential_mode": "integer",
+   "N_theta": 152,
+   "cells_around_min": 146.9159941878488,
+   "cells_around_max": 158.03211996624788,
+   "integer_N_max_size_deviation": 0.039684999777946484,
+   "seam_rib": false,
+   "table": [
+    2048,
+    257
+   ]
+  },
+  "timings_s": {
+   "tables": 0.1211327,
+   "render": 26.7958599,
+   "mask_raw": 7.3047148,
+   "opening": 96.783505,
+   "mask": 3.8530658,
+   "stl": 4.8109613,
+   "total": 144.2846842
+  },
+  "_report_path": "D:\\voxlat_git\\results\\export\\task12_slots_best_at_cap_gyroid_full_report.json"
+ }
+}

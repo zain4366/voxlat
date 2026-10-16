@@ -1,0 +1,121 @@
+Task 7 finite-gap correction (n = 32, 270 strips, wall 0.5 L)
+
+wall coefficient a(theta) = sum beta_j f_j,  f = 1, r, w, b, r*w, r*b, log a_z
+  r = (rho*-0.35)/0.1, b = 4w(1-w)
+  k_n   (series  ) beta = [1: +0.0206, r: -0.0011, w: -0.0164, b: -0.0729, r*w: +0.0011, r*b: +0.0248, log a_z: -0.0312]; c_g = +0.05; phase scatter of a = 0.0645; rms residual of a = 0.0548
+  K_t   (parallel) beta = [1: +0.2663, r: -0.0147, w: -0.0616, b: +0.0110, r*w: -0.0035, r*b: -0.0001, log a_z: +0.0891]; c_g = -1.29; phase scatter of a = 0.0394; rms residual of a = 0.0327
+  C_nn  (series  ) beta = [1: -0.0385, r: +0.0234, w: -0.0034, b: -0.2056, r*w: -0.0239, r*b: +0.1111, log a_z: -0.0563]; c_g = +0.84; phase scatter of a = 0.0647; rms residual of a = 0.0633
+  G_t   (series  ) beta = [1: -0.0383, r: +0.0261, w: +0.0680, b: -0.2169, r*w: -0.0170, r*b: +0.1032, log a_z: -0.0320]; c_g = +0.81; phase scatter of a = 0.0460; rms residual of a = 0.0468
+  G_sz  (parallel) beta = [1: -0.0589, r: +0.0473, w: -0.0294, b: -0.5978, r*w: -0.0190, r*b: +0.4105, log a_z: +0.0099]; c_g = -0.70; phase scatter of a = 0.1154; rms residual of a = 0.1110
+
+1/N form per (theta, phase) group: rms / max |delta residual| of a/N (and of a/N + b/N^2):
+  k_n   a/N: rms 1.02 pp (worst max 16.06 pp); a/N + b/N^2: rms 0.98 pp
+  K_t   a/N: rms 0.38 pp (worst max 5.55 pp); a/N + b/N^2: rms 0.37 pp
+  C_nn  a/N: rms 3.07 pp (worst max 109.47 pp); a/N + b/N^2: rms 1.95 pp
+  G_t   a/N: rms 1.18 pp (worst max 24.17 pp); a/N + b/N^2: rms 0.89 pp
+  G_sz  a/N: rms 1.45 pp (worst max 31.17 pp); a/N + b/N^2: rms 1.40 pp
+
+phase-mean delta at N = 1 / 2 / 3 [%] (uniform, a_z = 1):
+  B0.50 rho 0.25: k_n +9.7/+4.3/+2.8; K_t -26.5/-13.4/-9.1; C_nn +84.9/+17.9/+10.8; G_t +52.9/+17.5/+10.6; G_sz +104.9/+51.8/+34.5
+  B0.50 rho 0.35: k_n +13.9/+5.9/+3.7; K_t -23.9/-12.0/-8.1; C_nn +86.3/+15.3/+9.3; G_t +51.0/+16.6/+10.0; G_sz +83.5/+40.9/+27.1
+  B0.50 rho 0.45: k_n +1.4/+0.7/+0.4; K_t -23.4/-11.7/-7.8; C_nn +9.4/+4.3/+2.8; G_t +6.8/+3.1/+2.0; G_sz +13.8/+6.9/+4.6
+  D     rho 0.25: k_n -0.5/-0.3/-0.2; K_t -22.4/-11.2/-7.5; C_nn +4.4/+2.1/+1.4; G_t -2.0/-1.1/-0.8; G_sz +11.2/+5.5/+3.6
+  D     rho 0.35: k_n -0.7/-0.4/-0.2; K_t -20.3/-10.2/-6.8; C_nn +4.4/+2.1/+1.4; G_t -3.7/-1.9/-1.3; G_sz +7.7/+3.8/+2.5
+  D     rho 0.45: k_n -0.5/-0.3/-0.2; K_t -18.7/-9.4/-6.2; C_nn +4.4/+2.2/+1.4; G_t -3.9/-2.0/-1.4; G_sz +5.5/+2.7/+1.8
+  G     rho 0.25: k_n -2.1/-1.0/-0.7; K_t -28.4/-14.2/-9.4; C_nn +7.3/+3.5/+2.3; G_t +7.3/+3.4/+2.2; G_sz +11.4/+5.6/+3.7
+  G     rho 0.35: k_n -2.3/-1.1/-0.8; K_t -26.6/-13.3/-8.9; C_nn +4.1/+1.9/+1.3; G_t +3.3/+1.5/+1.0; G_sz +4.2/+2.1/+1.4
+  G     rho 0.45: k_n -1.9/-1.0/-0.6; K_t -25.4/-12.7/-8.5; C_nn +1.9/+0.9/+0.6; G_t +1.6/+0.7/+0.5; G_sz +1.9/+0.9/+0.6
+
+leave-one-group-out CV, rms error of delta [pp] (none = bulk closure uncorrected; phase floor = pooled scatter over cuts):
+  theta all   k_n  : none  4.12, physical  4.29, physical+GP  4.29, phase floor  4.14  (n = 270)
+  theta all   K_t  : none 12.89, physical  1.91, physical+GP  1.91, phase floor  2.23  (n = 270)
+  theta all   C_nn : none 17.59, physical 13.81, physical+GP 14.75, phase floor 12.80  (n = 270)
+  theta all   G_t  : none 10.84, physical  9.95, physical+GP  9.96, phase floor  5.31  (n = 270)
+  theta all   G_sz : none 20.57, physical 11.53, physical+GP 11.44, phase floor  5.74  (n = 270)
+  theta G/D   k_n  : none  1.15, physical  0.85, physical+GP  0.85, phase floor  0.96  (n = 192)
+  theta G/D   K_t  : none 12.88, physical  0.40, physical+GP  0.40, phase floor  0.28  (n = 192)
+  theta G/D   C_nn : none  2.79, physical  1.17, physical+GP  1.16, phase floor  1.31  (n = 192)
+  theta G/D   G_t  : none  2.23, physical  0.98, physical+GP  1.04, phase floor  0.82  (n = 192)
+  theta G/D   G_sz : none  4.26, physical  1.77, physical+GP  1.95, phase floor  0.67  (n = 192)
+  theta blend k_n  : none  7.44, physical  7.88, physical+GP  7.88, phase floor  7.54  (n = 78)
+  theta blend K_t  : none 12.92, physical  3.49, physical+GP  3.49, phase floor  4.12  (n = 78)
+  theta blend C_nn : none 32.43, physical 25.62, physical+GP 27.38, phase floor 23.72  (n = 78)
+  theta blend G_t  : none 19.86, physical 18.46, physical+GP 18.46, phase floor  9.79  (n = 78)
+  theta blend G_sz : none 37.68, physical 21.28, physical+GP 21.06, phase floor 10.64  (n = 78)
+  N     all   k_n  : none  4.30, physical  3.69, physical+GP  3.69, phase floor  4.27  (n = 225)
+  N     all   K_t  : none 13.35, physical  1.78, physical+GP  1.78, phase floor  2.17  (n = 225)
+  N     all   C_nn : none 18.71, physical 14.67, physical+GP 14.66, phase floor 13.78  (n = 225)
+  N     all   G_t  : none 11.04, physical  5.70, physical+GP  5.50, phase floor  5.49  (n = 225)
+  N     all   G_sz : none 22.29, physical  5.97, physical+GP  5.48, phase floor  6.19  (n = 225)
+  N     G/D   k_n  : none  1.19, physical  0.84, physical+GP  0.84, phase floor  0.99  (n = 162)
+  N     G/D   K_t  : none 13.36, physical  0.29, physical+GP  0.29, phase floor  0.29  (n = 162)
+  N     G/D   C_nn : none  2.84, physical  1.19, physical+GP  1.20, phase floor  1.36  (n = 162)
+  N     G/D   G_t  : none  2.29, physical  0.83, physical+GP  0.83, phase floor  0.86  (n = 162)
+  N     G/D   G_sz : none  4.56, physical  1.14, physical+GP  1.10, phase floor  0.72  (n = 162)
+  N     blend k_n  : none  7.91, physical  6.84, physical+GP  6.84, phase floor  7.91  (n = 63)
+  N     blend K_t  : none 13.33, physical  3.34, physical+GP  3.34, phase floor  4.07  (n = 63)
+  N     blend C_nn : none 35.06, physical 27.65, physical+GP 27.63, phase floor 25.94  (n = 63)
+  N     blend G_t  : none 20.54, physical 10.69, physical+GP 10.30, phase floor 10.28  (n = 63)
+  N     blend G_sz : none 41.48, physical 11.13, physical+GP 10.20, phase floor 11.64  (n = 63)
+
+graded strips: gradient effect Delta_g = (1+delta_g)/(1+delta_uniform) - 1, phase mean [%]:
+                           Delta_k_n  Delta_K_t  Delta_C_nn  Delta_G_t  Delta_G_sz
+  morphology N   gradient                                                         
+  B0.50      2.0 0.075         -2.58      -0.59        0.67       0.89      -15.38
+                 0.150         -2.67      -3.98       10.56       8.63      -20.04
+             4.0 0.025         -1.49      -0.09       -1.65      -1.03       -7.97
+                 0.050         -1.03      -0.99        2.25       1.68       -9.62
+                 0.075         -1.66      -2.24        5.39       4.67      -11.63
+  D          2.0 0.075         -0.02      -0.88        0.30       0.51       -0.35
+                 0.150          0.17      -2.83        1.05       1.24       -0.52
+             4.0 0.025          0.10      -0.18        0.39       0.32       -0.37
+                 0.050         -0.22      -0.59       -0.25      -0.06       -0.25
+                 0.075          0.14      -1.44        0.51       0.61       -0.27
+  G          2.0 0.075         -0.48      -0.62       -0.08       0.15       -0.16
+                 0.150         -0.14      -2.84        2.01       2.89       -0.53
+             4.0 0.025         -0.32      -0.09       -0.35      -0.02       -0.03
+                 0.050         -0.19      -0.61        0.40       0.43       -0.07
+                 0.075         -0.20      -1.49        1.04       1.42       -0.24
+  G/D, all quantities: worst |Delta_g| g=0.025: 0.86 %, g=0.05: 1.01 %, g=0.075: 2.02 %, g=0.15: 3.49 %  -> largest g with |Delta_g| <= 2 %: 0.05
+  blend, k_n and K_t: worst |Delta_g| g=0.025: 3.70 %, g=0.05: 6.58 %, g=0.075: 13.16 %, g=0.15: 19.63 %  -> largest g with |Delta_g| <= 2 %: None
+  blend, all quantities: worst |Delta_g| g=0.025: 12.16 %, g=0.05: 13.45 %, g=0.075: 21.27 %, g=0.15: 26.48 %  -> largest g with |Delta_g| <= 2 %: None
+
+convergence check (delta [%]):
+  morphology   N  n  wall  delta_k_n  delta_K_t  delta_C_nn  delta_G_t  delta_G_sz
+           G 1.0 24   0.5      -1.86     -26.24        3.51       4.12        5.27
+           G 1.0 32   0.5      -1.74     -26.23        4.13       4.14        4.70
+           G 1.0 48   0.5      -2.33     -26.64        2.77       3.19        4.37
+           G 2.0 24   0.5      -0.94     -13.10        1.67       1.88        2.61
+           G 2.0 32   0.5      -0.88     -13.10        1.97       1.90        2.32
+           G 2.0 48   0.5      -1.18     -13.30        1.32       1.45        2.16
+           G 4.0 24   0.5      -0.47      -6.55        0.83       0.91        1.30
+           G 4.0 32   0.5      -0.44      -6.55        0.98       0.92        1.16
+           G 4.0 48   0.5      -0.59      -6.65        0.66       0.69        1.08
+           D 1.0 24   0.5       1.10     -19.47        7.05      -2.18        6.81
+           D 1.0 32   0.5       0.20     -19.92        5.41      -2.69        6.24
+           D 1.0 48   0.5      -0.50     -20.10        4.68      -2.82        6.12
+           D 2.0 24   0.5       0.55      -9.73        3.41      -1.27        3.29
+           D 2.0 32   0.5       0.10      -9.96        2.63      -1.52        3.01
+           D 2.0 48   0.5      -0.25     -10.05        2.29      -1.59        2.95
+           D 4.0 24   0.5       0.27      -4.87        1.67      -0.69        1.62
+           D 4.0 32   0.5       0.05      -4.98        1.30      -0.81        1.48
+           D 4.0 48   0.5      -0.12      -5.03        1.13      -0.85        1.45
+
+wall_thickness check (delta [%]):
+  morphology   N  n  wall  delta_k_n  delta_K_t  delta_C_nn  delta_G_t  delta_G_sz
+           G 1.0 32 0.125       0.07     -26.23        3.31       0.80        4.02
+           G 1.0 32 0.250      -0.89     -26.23        4.55       2.63        4.40
+           G 1.0 32 0.500      -1.74     -26.23        4.13       4.14        4.70
+           G 1.0 32 1.000      -1.96     -26.23        3.40       4.48        4.83
+           G 2.0 32 0.125       0.03     -13.10        1.61       0.44        2.00
+           G 2.0 32 0.250      -0.45     -13.10        2.18       1.27        2.18
+           G 2.0 32 0.500      -0.88     -13.10        1.97       1.90        2.32
+           G 2.0 32 1.000      -0.99     -13.10        1.61       2.03        2.38
+           D 1.0 32 0.125       1.45     -19.92        5.52      -4.03        4.90
+           D 1.0 32 0.250       0.73     -19.92        6.30      -3.17        5.88
+           D 1.0 32 0.500       0.20     -19.92        5.41      -2.69        6.24
+           D 1.0 32 1.000       0.12     -19.92        5.01      -2.60        6.27
+           D 2.0 32 0.125       0.72      -9.96        2.69      -2.06        2.42
+           D 2.0 32 0.250       0.36      -9.96        3.06      -1.69        2.87
+           D 2.0 32 0.500       0.10      -9.96        2.63      -1.52        3.01
+           D 2.0 32 1.000       0.06      -9.96        2.44      -1.50        3.02

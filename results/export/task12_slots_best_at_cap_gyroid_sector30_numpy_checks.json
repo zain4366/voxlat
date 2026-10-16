@@ -1,0 +1,183 @@
+{
+ "volume_fraction_raw": {
+  "voxel_mm": 0.06,
+  "n_voxels": 33374178,
+  "solid_fraction": 0.3908477386319447,
+  "target_rho_mean": 0.390462343425256,
+  "relative_error": 0.0009870227262069875,
+  "core_relative_error": 0.0016185628678253572,
+  "near_wall_relative_error": -1.111415179744224e-05,
+  "core_fraction_of_voxels": 0.6126643179046987,
+  "phase_aware_expected": 0.39035707813762377,
+  "relative_error_vs_phase_aware": 0.0012569529843340366,
+  "core_relative_error_vs_phase_aware": 0.002490172516607325,
+  "near_wall_relative_error_vs_phase_aware": -0.0006891114841736101,
+  "patches": {
+   "size_mm": 6.658033711962518,
+   "count": 30,
+   "vs_design_mean_abs_rel_error": 0.006836195873759395,
+   "vs_design_max_abs_rel_error": 0.022349820478034577,
+   "vs_phase_aware_mean_abs_rel_error": 0.006817219394488061,
+   "vs_phase_aware_max_abs_rel_error": 0.022542093876408043
+  }
+ },
+ "wall_raw_interior": {
+  "evaluated_voxels": 12525235,
+  "resolution_mm": [
+   -0.045,
+   0.045
+  ],
+  "thin_voxels_at_limit": 0,
+  "min_wall_mm": 0.50234375
+ },
+ "checks": {
+  "voxel_mm": 0.06,
+  "shape": [
+   343,
+   843,
+   918
+  ],
+  "source": "numpy",
+  "kind": "clean",
+  "limits": {
+   "min_wall_mm": 0.35,
+   "min_pore_mm": 0.8,
+   "interface_band_mm": 0.47
+  },
+  "wall_resolved": true,
+  "wall": {
+   "evaluated_voxels": 12525235,
+   "resolution_mm": [
+    -0.045,
+    0.045
+   ],
+   "thin_voxels_at_limit": 0,
+   "min_wall_mm": 0.50234375
+  },
+  "interface_slivers": {
+   "min_wall_mm": 0.36015624999999996,
+   "thin_voxels": 0,
+   "thin_volume_mm3": 0.0,
+   "band_mm": 0.47
+  },
+  "trapped_pockets": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest": [],
+   "voxel_scale_count": 1,
+   "voxel_scale_volume_mm3": 0.00021599999999999996,
+   "voxel_scale_largest": [
+    {
+     "voxels": 1,
+     "centre_mm": [
+      74.82,
+      -20.159999999999997,
+      0.06000000000000005
+     ]
+    }
+   ],
+   "resolution_diameter_mm": 0.18
+  },
+  "paths": [
+   {
+    "from": "cut_face_lo",
+    "to": "outlet",
+    "connected": true,
+    "throat_mm": 1.06640625,
+    "terminal_voxels": [
+     104922,
+     22919131
+    ]
+   },
+   {
+    "from": "cut_face_hi",
+    "to": "outlet",
+    "connected": true,
+    "throat_mm": 1.03125,
+    "terminal_voxels": [
+     102120,
+     22919131
+    ]
+   }
+  ],
+  "connected": true,
+  "min_throat_mm": 1.03125,
+  "loose_solid": {
+   "count": 0,
+   "volume_mm3": 0.0,
+   "largest_voxels": 0,
+   "solid_components": 7
+  },
+  "pass": {
+   "min_wall": true,
+   "min_pore": true,
+   "connected": true,
+   "no_trapped_pockets": true,
+   "no_loose_solid": true
+  },
+  "all_pass": true,
+  "wall_time_s": 506.2063089740004
+ },
+ "field": {
+  "circumferential_mode": "integer",
+  "circumferential_stretch_min": 0.9665525933411108,
+  "circumferential_stretch_max": 1.0396849997779465,
+  "axial_phase_shear_deg_p95": 6.350793506675515,
+  "circumferential_phase_shear_deg_p95": 21.366779320531872,
+  "seam_angle_deg": 0.0,
+  "seam_rib": false,
+  "seam_rib_mm": 0.0,
+  "integer_N_max_size_deviation": 0.039684999777946484,
+  "N_theta": 152,
+  "cells_around_min": 146.91599418784884,
+  "cells_around_max": 158.03211996624788,
+  "circumferential_size_deviation_min": -0.033447406658889234,
+  "circumferential_size_deviation_max": 0.039684999777946484,
+  "axial_cells_min": 10.316433001678162,
+  "axial_cells_max": 22.472217552320227,
+  "axial_phase_shear_deg_max": 9.060417477999485,
+  "circumferential_phase_shear_deg_max": 23.447088315294028,
+  "axial_phase_origin_mm": 25.0,
+  "radial_cells_min": 1.195892883963399,
+  "radial_cells_max": 2.745305664181376,
+  "conformal_size_ratio_inner": 0.9597315436241611,
+  "conformal_size_ratio_outer": 1.0402684563758389,
+  "table": [
+   2048,
+   257
+  ]
+ },
+ "generation_s": 135.13261953099936,
+ "volume_raw_mm3": 13086.533015999998,
+ "volume_clean_mm3": 13074.661439999998,
+ "config": {
+  "design_label": "best_at_cap_gyroid",
+  "layout": "slots",
+  "render": {
+   "mode": "sector",
+   "voxel_size_mm": 0.06,
+   "sector_center_deg": 173.75,
+   "sector_angle_deg": 30.0,
+   "sector_margin_mm": 2.0,
+   "sliver_radius_mm": 0.175,
+   "sliver_band_mm": 0.47,
+   "save_stl": true,
+   "write_mask": true,
+   "write_raw_mask": true,
+   "show_in_viewer": true,
+   "output_dir": "/home/user/voxlat/results/export",
+   "name": "task12_slots_best_at_cap_gyroid_sector30"
+  },
+  "critical_location": {
+   "theta_deg": 173.75,
+   "z_mm": 49.75247524752475,
+   "L_over_Lmin": 1.395973200694598,
+   "rho": 0.38972691186594255,
+   "w": 0.0,
+   "L_mm": 2.2112285200865123,
+   "L_min_mm": 1.5840049930659597
+  }
+ },
+ "total_s": 1099.8874575600003,
+ "peak_rss_GB": 6.106648
+}

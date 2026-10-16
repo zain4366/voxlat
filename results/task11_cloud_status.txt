@@ -1,0 +1,30 @@
+end_rings/nsga2_s0.json done 9995 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+end_rings/nsga2_s1.json done 10000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+end_rings/nsga2_s2.json done 10000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+end_rings/nsga2_s3.json done 10000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+end_rings/nsga2_s4.json done 10000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+end_rings/qnehvi_s0.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+end_rings/qnehvi_s1.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+end_rings/qnehvi_s2.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+end_rings/qnehvi_s3.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+end_rings/qnehvi_s4.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+end_rings/sobol_s0.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+end_rings/sobol_s1.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+end_rings/sobol_s2.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+end_rings/sobol_s3.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+end_rings/sobol_s4.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/nsga2_s0.json done 10000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/nsga2_s1.json done 10000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/nsga2_s2.json done 9999 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/nsga2_s3.json done 9999 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/nsga2_s4.json done 10000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/qnehvi_s0.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+slots/qnehvi_s1.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+slots/qnehvi_s2.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+slots/qnehvi_s3.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+slots/qnehvi_s4.json done 200 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} botorch
+slots/sobol_s0.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/sobol_s1.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/sobol_s2.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/sobol_s3.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 
+slots/sobol_s4.json done 1000 {'table': 'fine', 'cell_margin': 0.01, 'valley_wall': 0.09} 

@@ -1,0 +1,8 @@
+SKIPPED [1] tests/test_elasticity.py:289: pyamg not installed
+SKIPPED [5] tests/test_export_dotnet.py:46: C# probe not built (dotnet build ...VoxLat.Export.Probe.csproj -c Release)
+SKIPPED [1] tests/test_export_dotnet.py:67: C# probe not built (dotnet build ...VoxLat.Export.Probe.csproj -c Release)
+SKIPPED [1] tests/test_export_dotnet.py:78: C# probe not built (dotnet build ...VoxLat.Export.Probe.csproj -c Release)
+SKIPPED [1] tests/test_optimize.py:327: pymoo not installed
+SKIPPED [1] tests/test_optimize.py:452: pymoo not installed
+SKIPPED [1] tests/test_surrogates.py:585: Task 5 closure table not readable (needs data/closures.parquet + pyarrow, or VOXLAT_CLOSURE_TABLE)
+519 passed, 13 skipped, 18 deselected, 111 warnings in 283.93s (0:04:43)

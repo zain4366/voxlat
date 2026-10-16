@@ -1,0 +1,552 @@
+{
+ "label": "min_mass",
+ "layout": "slots",
+ "type": "graded_tpms_jacket",
+ "voxlat_task": 11,
+ "units": "SI (m, kg, K, W, Pa); rho = relative density, w = blend weight (0 gyroid, 1 diamond), L = cell size",
+ "basis": {
+  "spec": {
+   "rho": [
+    8,
+    4
+   ],
+   "w": [
+    8,
+    4
+   ],
+   "L": [
+    4,
+    2
+   ],
+   "a_z": [
+    0,
+    0
+   ],
+   "fixed": {
+    "a_z": 1.0
+   }
+  },
+  "bounds": {
+   "rho": [
+    0.2,
+    0.5
+   ],
+   "w": [
+    0.0,
+    1.0
+   ],
+   "L": [
+    0.002,
+    0.006
+   ],
+   "a_z": [
+    0.7,
+    1.5
+   ]
+  },
+  "s_basis": "periodic uniform cubic B-spline; control i centred at theta_i = i*360/n_s deg (theta = s / r_m from theta = 0); B3(t) = (4-6t^2+3|t|^3)/6 (|t|<1), (2-|t|)^3/6 (1<=|t|<2)",
+  "z_basis": "clamped uniform B-spline of degree min(3, n_z-1) on z in [0, L_ax] (n_z=4: cubic Bezier, n_z=2: linear, n_z=1: constant)",
+  "value": "f = lo + (hi - lo) * sum_ij x_ij Bs_i(s) Bz_j(z), x_ij in [0, 1]",
+  "r_mean_m": 0.07450000000000001,
+  "circumference_m": 0.46809730538487926,
+  "axial_length_m": 0.05,
+  "gradient_limit": 0.05
+ },
+ "control_nets": {
+  "rho": [
+   [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ],
+   [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ],
+   [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ],
+   [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ],
+   [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ],
+   [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ],
+   [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ],
+   [
+    0.2,
+    0.2,
+    0.2,
+    0.2
+   ]
+  ],
+  "w": [
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ]
+  ],
+  "L": [
+   [
+    0.002,
+    0.002
+   ],
+   [
+    0.002,
+    0.002
+   ],
+   [
+    0.002,
+    0.002
+   ],
+   [
+    0.002,
+    0.002
+   ]
+  ]
+ },
+ "control_nets_unit": {
+  "rho": [
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  ],
+  "w": [
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ],
+   [
+    1.0,
+    1.0,
+    1.0,
+    1.0
+   ]
+  ],
+  "L": [
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ]
+  ]
+ },
+ "fixed_fields": {
+  "a_z": 1.0
+ },
+ "x_unit": [
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  1.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0,
+  0.0
+ ],
+ "field_stats": {
+  "rho": {
+   "min": 0.19999999999999993,
+   "max": 0.20000000000000012,
+   "area_mean": 0.20000000000000004
+  },
+  "w": {
+   "min": 0.9999999999999996,
+   "max": 1.0000000000000004,
+   "area_mean": 1.0
+  },
+  "L": {
+   "min": 0.0019999999999999996,
+   "max": 0.0020000000000000005,
+   "area_mean": 0.002
+  }
+ },
+ "metrics_nominal_flow": {
+  "thermal_resistance": 0.023641889298749687,
+  "R_active": 0.016093126025432426,
+  "T_wall_max": 341.35425476003724,
+  "T_out": 327.42302996670116,
+  "delta_p": 2773.6233483222477,
+  "pump_power": 0.462270558053708,
+  "mass": 0.29089381670520037,
+  "mass_lattice": 0.07018318832265767,
+  "min_structural_margin": 12.6345339364536,
+  "lattice_margin": 12.949332750612733,
+  "outer_wall_margin": 12.6345339364536,
+  "manufacturable": true,
+  "energy_balance_error": 5.78917000917476e-13,
+  "mass_balance_error": 3.9302328752599536e-15,
+  "manufacturability": {
+   "within_bounds": true,
+   "bounds": {
+    "rho": true,
+    "w": true,
+    "L": true,
+    "a_z": true
+   },
+   "cell_size_ok": true,
+   "cell_size_ratio_min": 1.130952380952379,
+   "gradient_ok": true,
+   "gradient_max": 1.784071711305013e-16,
+   "gradient_limit": 0.05,
+   "N_min": 2.9999999999999996,
+   "finite_gap_valid": true,
+   "pinch_neck_area_fraction": 0.0,
+   "manufacturable": true
+  },
+  "diagnostics": {
+   "reynolds_median": 92.90430860636921,
+   "U_eff_mean": 14719.953795227599,
+   "fin_efficiency_mean": 0.20252443513521537,
+   "forchheimer_number_range": [
+    0.5294242457509949,
+    0.5294242457512081
+   ],
+   "heat_to_manifold_plenums": {
+    "inlet": 1.3225371947654718,
+    "outlet": 1.286488806724496
+   }
+  }
+ },
+ "flow_sweep": [
+  {
+   "flow_rate_m3s": 1.6666666666666667e-05,
+   "flow_lpm": 1.0,
+   "thermal_resistance": 0.035922532651088496,
+   "R_active": 0.02868239081520168,
+   "pump_power": 0.03951012139769916,
+   "delta_p": 711.1821851585848,
+   "min_structural_margin": 12.764362193077048
+  },
+  {
+   "flow_rate_m3s": 3.3333333333333335e-05,
+   "flow_lpm": 2.0,
+   "thermal_resistance": 0.026970226892264495,
+   "R_active": 0.01953881830631613,
+   "pump_power": 0.18174703347399232,
+   "delta_p": 1635.7233012659308,
+   "min_structural_margin": 12.705834976395538
+  },
+  {
+   "flow_rate_m3s": 5e-05,
+   "flow_lpm": 3.0,
+   "thermal_resistance": 0.023641889298749687,
+   "R_active": 0.016093126025432426,
+   "pump_power": 0.462270558053708,
+   "delta_p": 2773.6233483222477,
+   "min_structural_margin": 12.6345339364536
+  },
+  {
+   "flow_rate_m3s": 6.666666666666667e-05,
+   "flow_lpm": 4.0,
+   "thermal_resistance": 0.021790712288757334,
+   "R_active": 0.014159765923832989,
+   "pump_power": 0.916640516961559,
+   "delta_p": 4124.882326327015,
+   "min_structural_margin": 12.550896276899458
+  },
+  {
+   "flow_rate_m3s": 8.333333333333333e-05,
+   "flow_lpm": 5.0,
+   "thermal_resistance": 0.020563266378969478,
+   "R_active": 0.012869491601935727,
+   "pump_power": 1.5804167320228244,
+   "delta_p": 5689.5002352821675,
+   "min_structural_margin": 12.45542539935922
+  }
+ ],
+ "source": {
+  "run": "nsga2_s0",
+  "method": "nsga2",
+  "seed": 0,
+  "eval_id": 4,
+  "selection": "minimum mass on the combined feasible front"
+ },
+ "manufacturability_check": {
+  "method": "Task 1 check_manufacturable at n = 48 on the most critical cells (fine table) and the tightest blend-band cells",
+  "cells": [
+   {
+    "w": 0.9999999999999996,
+    "rho": 0.19999999999999996,
+    "L_m": 0.0019999999999999996,
+    "L_over_Lmin_fine": 1.1309523809523783,
+    "selected_as": "smallest L/L_min",
+    "ok_direct_n48": true,
+    "reasons": []
+   }
+  ],
+  "all_ok": true
+ },
+ "model": {
+  "manifold_layout": "slots",
+  "grid": [
+   376,
+   20
+  ],
+  "options": {
+   "spacing": 0.00125,
+   "spacing_z": 0.0025,
+   "backend": "ensemble",
+   "finite_gap": true,
+   "check_bounds": "ignore",
+   "cf_source": "gajetti2025",
+   "inertia": true,
+   "nu_variant": 1,
+   "pr_exponent": 0.3333333333333333,
+   "fin_model": "fin",
+   "wall_exposed_convection": true,
+   "manifold_htc": null,
+   "sleeve_conduction": true,
+   "lattice_conduction": true,
+   "fluid_conduction": true,
+   "wall_condition": "flux",
+   "wall_temperature": null,
+   "picard_tol": 1e-08,
+   "picard_maxiter": 200,
+   "picard_relaxation": 0.7,
+   "gradient_limit": null,
+   "manifold_layout": "slots"
+  }
+ },
+ "run_record": {
+  "params": {
+   "layout": "slots",
+   "label": "min_mass"
+  },
+  "params_json": "{\"label\": \"min_mass\", \"layout\": \"slots\"}",
+  "voxlat_version": "0.1.0",
+  "git_hash": "e67e5c568635+dirty",
+  "resolution": null,
+  "wall_time_s": null,
+  "timestamp_utc": "2026-10-16T07:40:02+00:00",
+  "python": "3.12.15",
+  "numpy": "2.5.4",
+  "platform": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
+  "extra": {}
+ }
+}

@@ -1,0 +1,89 @@
+layout,design,cap_W,family,R_baseline_mK_W,P_baseline_W,R_opt_mK_W,P_opt_W,mass_opt_kg,R_change_pct
+slots,Task 11 optimum (archive),0.1,B1s,28.8927,0.0844612,26.5614,0.0990955,0.29916,-8.0689
+slots,Task 11 optimum (archive),0.1,B2,28.1,0.0996997,26.5614,0.0990955,0.29916,-5.4755
+slots,Task 11 optimum (archive),0.1,U-G,28.1,0.0996997,26.5614,0.0990955,0.29916,-5.4755
+slots,Task 11 optimum (archive),0.1,U-D,28.9029,0.0990435,26.5614,0.0990955,0.29916,-8.10142
+slots,Task 11 optimum (archive),0.1,B1,18.4332,0.0968314,26.5614,0.0990955,0.29916,44.0951
+slots,Task 11 optimum (archive),0.25,B1s,25.6668,0.181386,22.369,0.24536,0.311632,-12.8487
+slots,Task 11 optimum (archive),0.25,B2,24.9485,0.249179,22.369,0.24536,0.311632,-10.3396
+slots,Task 11 optimum (archive),0.25,B3,23.815,0.224114,22.369,0.24536,0.311632,-6.07187
+slots,Task 11 optimum (archive),0.25,U-G,24.9485,0.249179,22.369,0.24536,0.311632,-10.3396
+slots,Task 11 optimum (archive),0.25,U-D,25.2813,0.248279,22.369,0.24536,0.311632,-11.5198
+slots,Task 11 optimum (archive),0.25,B1,14.3271,0.20064,22.369,0.24536,0.311632,56.131
+slots,Task 11 optimum (archive),0.3055,B1s,25.6668,0.181386,21.9406,0.303882,0.309562,-14.5175
+slots,Task 11 optimum (archive),0.3055,B2,24.4636,0.293092,21.9406,0.303882,0.309562,-10.3132
+slots,Task 11 optimum (archive),0.3055,B3,22.6709,0.30449,21.9406,0.303882,0.309562,-3.22129
+slots,Task 11 optimum (archive),0.3055,U-G,24.4636,0.293092,21.9406,0.303882,0.309562,-10.3132
+slots,Task 11 optimum (archive),0.3055,U-D,24.6499,0.299258,21.9406,0.303882,0.309562,-10.9909
+slots,Task 11 optimum (archive),0.3055,B1,13.2601,0.286712,21.9406,0.303882,0.309562,65.4632
+slots,Task 11 optimum (archive),0.5,B1s,25.6668,0.181386,20.9701,0.494945,0.323384,-18.299
+slots,Task 11 optimum (archive),0.5,B2,23.1577,0.486883,20.9701,0.494945,0.323384,-9.44656
+slots,Task 11 optimum (archive),0.5,B3,22.6709,0.30449,20.9701,0.494945,0.323384,-7.50248
+slots,Task 11 optimum (archive),0.5,U-G,23.1577,0.486883,20.9701,0.494945,0.323384,-9.44656
+slots,Task 11 optimum (archive),0.5,U-D,23.3463,0.491886,20.9701,0.494945,0.323384,-10.1782
+slots,Task 11 optimum (archive),0.5,B1,12.4277,0.43515,20.9701,0.494945,0.323384,68.7369
+slots,Task 11 optimum (archive),1,B1s,25.6668,0.181386,20.5742,0.851505,0.358144,-19.8413
+slots,Task 11 optimum (archive),1,B2,21.6456,0.994642,20.5742,0.851505,0.358144,-4.9496
+slots,Task 11 optimum (archive),1,B3,22.6709,0.30449,20.5742,0.851505,0.358144,-9.24859
+slots,Task 11 optimum (archive),1,U-G,21.6456,0.994642,20.5742,0.851505,0.358144,-4.9496
+slots,Task 11 optimum (archive),1,U-D,21.6943,0.973674,20.5742,0.851505,0.358144,-5.16327
+slots,Task 11 optimum (archive),1,B1,10.334,0.817316,20.5742,0.851505,0.358144,99.0931
+slots,Task 11 optimum (archive),2,B1s,25.6668,0.181386,20.5742,0.851505,0.358144,-19.8413
+slots,Task 11 optimum (archive),2,B2,20.7152,1.81137,20.5742,0.851505,0.358144,-0.680594
+slots,Task 11 optimum (archive),2,B3,22.6709,0.30449,20.5742,0.851505,0.358144,-9.24859
+slots,Task 11 optimum (archive),2,U-G,20.7152,1.81137,20.5742,0.851505,0.358144,-0.680593
+slots,Task 11 optimum (archive),2,U-D,20.7708,1.80118,20.5742,0.851505,0.358144,-0.94655
+slots,Task 11 optimum (archive),2,B1,9.93659,1.92144,20.5742,0.851505,0.358144,107.055
+end_rings,Task 11 optimum (archive),0.01,U-G,11.6158,0.00974828,10.3627,0.00992491,0.32493,-10.7879
+end_rings,Task 11 optimum (archive),0.01,U-D,11.6609,0.00997598,10.3627,0.00992491,0.32493,-11.1327
+end_rings,Task 11 optimum (archive),0.01,B1s,52.2292,0.00975861,10.3627,0.00992491,0.32493,-80.1592
+end_rings,Task 11 optimum (archive),0.03,U-G,9.51294,0.0274706,9.04148,0.0287367,0.346124,-4.95595
+end_rings,Task 11 optimum (archive),0.03,U-D,9.41856,0.0299273,9.04148,0.0287367,0.346124,-4.0036
+end_rings,Task 11 optimum (archive),0.03,B1s,36.8627,0.0269089,9.04148,0.0287367,0.346124,-75.4725
+end_rings,Task 11 optimum (archive),0.1,B1,18.4332,0.0968314,8.57271,0.0648731,0.408184,-53.4932
+end_rings,Task 11 optimum (archive),0.1,U-G,8.8112,0.053587,8.57271,0.0648731,0.408184,-2.7067
+end_rings,Task 11 optimum (archive),0.1,U-D,8.63388,0.0615809,8.57271,0.0648731,0.408184,-0.708492
+end_rings,Task 11 optimum (archive),0.1,B1s,28.8927,0.0844612,8.57271,0.0648731,0.408184,-70.3291
+end_rings,Task 11 optimum (archive),0.1,B2,28.1,0.0996997,8.57271,0.0648731,0.408184,-69.4921
+end_rings,Task 11 optimum (archive),0.25,B1,14.3271,0.20064,8.57271,0.0648731,0.408184,-40.1642
+end_rings,Task 11 optimum (archive),0.25,U-G,8.8112,0.053587,8.57271,0.0648731,0.408184,-2.7067
+end_rings,Task 11 optimum (archive),0.25,U-D,8.63388,0.0615809,8.57271,0.0648731,0.408184,-0.708492
+end_rings,Task 11 optimum (archive),0.25,B1s,25.6668,0.181386,8.57271,0.0648731,0.408184,-66.6
+end_rings,Task 11 optimum (archive),0.25,B2,24.9485,0.249179,8.57271,0.0648731,0.408184,-65.6384
+end_rings,Task 11 optimum (archive),0.25,B3,23.815,0.224114,8.57271,0.0648731,0.408184,-64.0029
+end_rings,Task 11 optimum (archive),0.3055,B1,13.2601,0.286712,8.57271,0.0648731,0.408184,-35.3497
+end_rings,Task 11 optimum (archive),0.3055,U-G,8.8112,0.053587,8.57271,0.0648731,0.408184,-2.7067
+end_rings,Task 11 optimum (archive),0.3055,U-D,8.63388,0.0615809,8.57271,0.0648731,0.408184,-0.708492
+end_rings,Task 11 optimum (archive),0.3055,B1s,25.6668,0.181386,8.57271,0.0648731,0.408184,-66.6
+end_rings,Task 11 optimum (archive),0.3055,B2,24.4636,0.293092,8.57271,0.0648731,0.408184,-64.9573
+end_rings,Task 11 optimum (archive),0.3055,B3,22.6709,0.30449,8.57271,0.0648731,0.408184,-62.1863
+end_rings,Task 11 optimum (archive),0.5,B1,12.4277,0.43515,8.57271,0.0648731,0.408184,-31.0191
+end_rings,Task 11 optimum (archive),0.5,U-G,8.8112,0.053587,8.57271,0.0648731,0.408184,-2.7067
+end_rings,Task 11 optimum (archive),0.5,U-D,8.63388,0.0615809,8.57271,0.0648731,0.408184,-0.708492
+end_rings,Task 11 optimum (archive),0.5,B1s,25.6668,0.181386,8.57271,0.0648731,0.408184,-66.6
+end_rings,Task 11 optimum (archive),0.5,B2,23.1577,0.486883,8.57271,0.0648731,0.408184,-62.9811
+end_rings,Task 11 optimum (archive),0.5,B3,22.6709,0.30449,8.57271,0.0648731,0.408184,-62.1863
+end_rings,Task 11 optimum (archive),1,B1,10.334,0.817316,8.57271,0.0648731,0.408184,-17.0432
+end_rings,Task 11 optimum (archive),1,U-G,8.8112,0.053587,8.57271,0.0648731,0.408184,-2.7067
+end_rings,Task 11 optimum (archive),1,U-D,8.63388,0.0615809,8.57271,0.0648731,0.408184,-0.708492
+end_rings,Task 11 optimum (archive),1,B1s,25.6668,0.181386,8.57271,0.0648731,0.408184,-66.6
+end_rings,Task 11 optimum (archive),1,B2,21.6456,0.994642,8.57271,0.0648731,0.408184,-60.3951
+end_rings,Task 11 optimum (archive),1,B3,22.6709,0.30449,8.57271,0.0648731,0.408184,-62.1863
+end_rings,Task 11 optimum (archive),2,B1,9.93659,1.92144,8.57271,0.0648731,0.408184,-13.7258
+end_rings,Task 11 optimum (archive),2,U-G,8.8112,0.053587,8.57271,0.0648731,0.408184,-2.7067
+end_rings,Task 11 optimum (archive),2,U-D,8.63388,0.0615809,8.57271,0.0648731,0.408184,-0.708492
+end_rings,Task 11 optimum (archive),2,B1s,25.6668,0.181386,8.57271,0.0648731,0.408184,-66.6
+end_rings,Task 11 optimum (archive),2,B2,20.7152,1.81137,8.57271,0.0648731,0.408184,-58.6163
+end_rings,Task 11 optimum (archive),2,B3,22.6709,0.30449,8.57271,0.0648731,0.408184,-62.1863
+slots,"best_at_cap_gyroid, 0.306 W cap (Task 11 rule)",0.3055,B1s,25.6668,0.181386,21.921,0.307588,0.309562,-14.5938
+slots,"best_at_cap_gyroid, 0.306 W cap (Task 11 rule)",0.3055,B2,24.4636,0.293092,21.921,0.307588,0.309562,-10.3932
+slots,"best_at_cap_gyroid, 0.306 W cap (Task 11 rule)",0.3055,B3,22.6709,0.30449,21.921,0.307588,0.309562,-3.30768
+slots,"best_at_cap_gyroid, 0.306 W cap (Task 11 rule)",0.3055,U-G,24.4636,0.293092,21.921,0.307588,0.309562,-10.3932
+slots,"best_at_cap_gyroid, 0.306 W cap (Task 11 rule)",0.3055,U-D,24.6499,0.299258,21.921,0.307588,0.309562,-11.0703
+slots,"best_at_cap_gyroid, 0.306 W cap (Task 11 rule)",0.3055,B1,13.2601,0.286712,21.921,0.307588,0.309562,65.3155
+slots,"best_at_cap_gyroid, matched: cap = P of the gyroid optimum",0.3076,B1s,25.6668,0.181386,21.921,0.307588,0.309562,-14.5938
+slots,"best_at_cap_gyroid, matched: cap = P of the gyroid optimum",0.3076,B2,24.3689,0.305541,21.921,0.307588,0.309562,-10.045
+slots,"best_at_cap_gyroid, matched: cap = P of the gyroid optimum",0.3076,B3,22.6709,0.30449,21.921,0.307588,0.309562,-3.30768
+slots,"best_at_cap_gyroid, matched: cap = P of the gyroid optimum",0.3076,U-G,24.3689,0.305541,21.921,0.307588,0.309562,-10.045
+slots,"best_at_cap_gyroid, matched: cap = P of the gyroid optimum",0.3076,U-D,24.6499,0.299258,21.921,0.307588,0.309562,-11.0703
+slots,"best_at_cap_gyroid, matched: cap = P of the gyroid optimum",0.3076,B1,13.2601,0.286712,21.921,0.307588,0.309562,65.3155

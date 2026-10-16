@@ -1,0 +1,13 @@
+family,flow_lpm,R_mK_W,R_active_mK_W,delta_p_Pa,pump_power_W,mass_kg,min_margin,label
+B1,1,25.9356,25.9356,491.894,0.0273275,0.333194,9.25522,B1 helical channels (end-ring manifolds)
+B1,3,13.2601,13.2601,1720.27,0.286712,0.333194,9.24439,B1 helical channels (end-ring manifolds)
+B1,5,10.1207,10.1207,3228.55,0.896819,0.333194,9.23113,B1 helical channels (end-ring manifolds)
+B1s,1,37.5343,30.4826,347.07,0.0192817,0.318967,4.24703,B1s circumferential channels (lattice slots)
+B1s,3,25.6668,18.2691,1088.32,0.181386,0.318967,4.24555,B1s circumferential channels (lattice slots)
+B1s,5,22.6238,15.0839,1884.98,0.523605,0.318967,4.24396,B1s circumferential channels (lattice slots)
+B2,1,38.0802,30.7984,357.398,0.0198555,0.343531,12.7869,B2 best uniform gyroid
+B2,3,24.3689,16.8083,1833.24,0.305541,0.343531,12.6934,B2 best uniform gyroid
+B2,5,20.7482,13.0358,4323.82,1.20106,0.343531,12.5387,B2 best uniform gyroid
+B3,1,35.8839,28.4295,354.226,0.0196792,0.334875,12.3597,B3 density-graded gyroid
+B3,3,22.6709,14.9702,1826.94,0.30449,0.334875,12.2803,B3 density-graded gyroid
+B3,5,19.3315,11.4956,4318.68,1.19963,0.334875,12.1482,B3 density-graded gyroid
